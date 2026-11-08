@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* 2026-11-08: Display an Agent Evals project banner before initialization logs, including the Automotive Express Order use case and OCI Responses/Langfuse stack.
 * 2026-11-08: Remove oracle winner recomputation from evaluation startup and add numbered English initialization logs with completion/failure status and elapsed timings, including Langfuse authentication and case upload.
 * 2026-11-08: Surface safe root-cause categories for OCI connection failures in evaluation results and progress messages, including DNS resolution failures hidden by APIConnectionError.
 * 2026-11-08: Require an explicit experiment name, use it in Langfuse with distinct per-execution run names, and add the executable root-level run_experiment.sh launcher for the agent-evals Conda environment.

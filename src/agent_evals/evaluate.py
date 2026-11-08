@@ -22,7 +22,7 @@ from tqdm import tqdm
 import httpx
 
 from agent_evals.config import ConfigurationError, ROOT, load_settings
-from agent_evals.console import initialization_step
+from agent_evals.console import initialization_step, show_banner
 from agent_evals.oci_model import build_instructions, create_client, invoke_model
 
 
@@ -382,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.experiment_name.strip():
         parser.error("--experiment-name must not be blank")
+    show_banner()
     try:
         with initialization_step(1, "Load dataset and verify structure and hashes"):
             cases = load_cases(args.dataset, args.rules, args.split, args.limit)

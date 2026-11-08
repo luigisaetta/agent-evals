@@ -64,7 +64,7 @@ PYTHONPATH=src python -m agent_evals.evaluate \
 
 Use `--split all` to run all 100 cases, explicitly combining development and held-out data. Use `--no-langfuse` to retain local results without contacting Langfuse. `--dataset`, `--rules`, `--env-file`, and `--output-dir` override file locations. Dataset files must have their companion `.manifest.json`; the runner rejects changed dataset or rule hashes, malformed case structure, and reference IDs absent from the supplied offers before calling any service. It does not recalculate which offer should win.
 
-Initialization prints numbered English activities, appending `OK` and elapsed time on completion or `FAILED` if a step raises an error. Langfuse case upload is shown separately so its duration is visible before the first model invocation. For example (illustrative timings):
+A compact Agent Evals banner introduces the Automotive Express Order demo before the first log, including during dry runs. Initialization prints numbered English activities, appending `OK` and elapsed time on completion or `FAILED` if a step raises an error. Langfuse case upload is shown separately so its duration is visible before the first model invocation. For example (illustrative timings):
 
 ```text
 [1] Load dataset and verify structure and hashes ... OK (0.01s)

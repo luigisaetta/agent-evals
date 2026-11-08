@@ -2,11 +2,25 @@
 Author: L. Saetta
 Date last modified: 2026-11-08
 License: MIT
-Description: Display numbered initialization activities and their outcomes.
+Description: Display the project banner and numbered initialization activities.
 """
 
 from contextlib import contextmanager
 import time
+
+
+def show_banner() -> None:
+    """Print the project identity before initialization logs."""
+    width = 62
+    lines = (
+        "AGENT EVALS",
+        "Automotive Express Order",
+        "OCI Generative AI | Responses API | Langfuse",
+    )
+    banner = ["", "╭" + "─" * width + "╮", "│" + " " * width + "│"]
+    banner.extend("│" + line.center(width) + "│" for line in lines)
+    banner.extend(["│" + " " * width + "│", "╰" + "─" * width + "╯", ""])
+    print("\n".join(banner), flush=True)
 
 
 @contextmanager
