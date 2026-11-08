@@ -35,6 +35,7 @@ Initial cases have at least one eligible offer and a unique winner after these r
 * [Catalog specification and data provenance](specs/catalogs.md)
 * [Synthetic dataset specification](specs/synthetic-dataset.md)
 * [100-case dataset, coverage, and regeneration instructions](data/datasets/README.md)
+* [OCI evaluation runner: setup, pacing, and Langfuse](docs/evaluation.md)
 * [Natural-language selection rules, version 1.1](rules/offer-selection.md)
 * [Repository working rules](AGENTS.md)
 * [Changelog](CHANGELOG.md)
@@ -47,4 +48,6 @@ Use the `agent-evals` Conda environment:
 conda activate agent-evals
 ```
 
-The project includes [synthetic reference catalogs](data/catalogs/README.md), a deterministic reference selector, and a [100-case dataset with six offers per case](data/datasets/README.md). Run `PYTHONPATH=src python -m agent_evals.generate_dataset` to regenerate the dataset and `python -m pytest` to verify selection and dataset coverage, after installing `requirements.txt` in the Conda environment. The selector creates reference labels; it does not replace the LLM under evaluation. Agent implementation, OCI execution, and Langfuse integration will follow.
+The project includes [synthetic reference catalogs](data/catalogs/README.md), a deterministic reference selector, a [100-case dataset with six offers per case](data/datasets/README.md), and an [OCI Responses evaluation runner with Langfuse tracking](docs/evaluation.md). Run `PYTHONPATH=src python -m agent_evals.generate_dataset` to regenerate the dataset and `python -m pytest` to verify it, after installing `requirements.txt` in the Conda environment. The selector creates reference labels; the model performs the actual selection during evaluation.
+
+Validate all cases without external calls using `PYTHONPATH=src python -m agent_evals.evaluate --dry-run --split all`. With `.env` and your OCI signing profile configured, run `PYTHONPATH=src python -m agent_evals.evaluate --split development --limit 1` for an initial integration check. The default live split is the 80 evaluation cases; `--sleep-seconds` overrides the configurable pause between calls.
