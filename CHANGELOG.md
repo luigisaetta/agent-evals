@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* 2026-11-08: Require an explicit experiment name, use it in Langfuse with distinct per-execution run names, and add the executable root-level run_experiment.sh launcher for the agent-evals Conda environment.
+* 2026-11-08: Rewrite the main README for a public demo audience, covering objectives, Automotive Express Order context, evaluation scenarios and metrics, architecture, OCI/Langfuse tooling, quick start, and verified integration scope.
 * 2026-11-08: Add a tqdm progress bar to local and Langfuse evaluation runs, preserving per-case status messages and counting failed attempts.
 * 2026-11-08: Verify the OCI IAM Responses and Langfuse integration on one development case after environment correction; confirm the correct selection and remotely persisted evaluation scores.
 * 2026-11-08: Add the sequential OCI Responses evaluation runner with user-principal signing from the OCI config file, dotenv settings, configurable inter-call sleep, local result persistence, and Langfuse dataset/experiment tracking; add mocked integration tests and setup documentation.

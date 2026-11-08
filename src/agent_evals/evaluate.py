@@ -258,7 +258,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             from agent_evals.langfuse_tracking import selection_evaluator
 
             experiment = tracking.run_experiment(
-                name=metadata["dataset_name"], run_name=metadata["run_name"],
+                name=metadata["experiment_name"], run_name=metadata["run_name"],
                 data=hosted_items, task=task, evaluators=[selection_evaluator],
                 max_concurrency=1,
                 metadata={k: str(v) for k, v in metadata.items() if k != "instructions"},
@@ -317,11 +317,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", choices=["evaluation", "development", "all"], default="evaluation")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--sleep-seconds", type=float)
-    parser.add_argument("--run-name")
+    parser.add_argument(
+        "--experiment-name", "--run-name", dest="experiment_name", required=True,
+        help="Experiment name used in Langfuse (--run-name is an alias).",
+    )
     parser.add_argument("--output-dir", type=Path, default=ROOT / "data/runs")
     parser.add_argument("--no-langfuse", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+    if not args.experiment_name.strip():
+        parser.error("--experiment-name must not be blank")
     try:
         cases = load_cases(args.dataset, args.rules, args.split, args.limit)
         if args.dry_run:
@@ -331,7 +336,8 @@ def main(argv: list[str] | None = None) -> int:
         rules = args.rules.read_text()
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
         metadata = {
-            "run_id": run_id, "run_name": f"{args.run_name}-{run_id}" if args.run_name else run_id,
+            "run_id": run_id, "experiment_name": args.experiment_name,
+            "run_name": f"{args.experiment_name}-{run_id}",
             "dataset_sha256": file_hash(args.dataset), "rules_sha256": file_hash(args.rules),
             "prompt_sha256": hashlib.sha256(build_instructions(rules).encode()).hexdigest(),
             "instructions": build_instructions(rules), "rules_version": "1.1", "dataset_version": "1.0",

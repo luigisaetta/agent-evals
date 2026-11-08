@@ -14,7 +14,9 @@ Use `EVAL_SLEEP_SECONDS` (default 2) with a `--sleep-seconds` override. Require 
 
 ## Execution and outputs
 
-* CLI supports dataset/rules paths, split (`evaluation` by default, `development`, or `all`), positive case limit, explicit run name, local output directory, and disabling Langfuse.
+* CLI requires a non-blank `--experiment-name` (`--run-name` remains an alias), including for dry runs. Pass the supplied name unchanged as the Langfuse experiment name and record it in local metadata. Keep a unique run-name suffix and local run identifier so repeated executions remain distinct.
+* CLI supports dataset/rules paths, split (`evaluation` by default, `development`, or `all`), positive case limit, local output directory, and disabling Langfuse.
+* Provide an executable root-level `run_experiment.sh EXPERIMENT_NAME [OPTIONS...]` wrapper that runs Python in the `agent-evals` Conda environment from the repository root and forwards CLI options and exit status. Names containing spaces must be supported. Missing or blank names must fail before any service call.
 * Show a `tqdm` progress bar over the selected cases for both local and Langfuse runs. Advance after every persisted attempt, including failures, preserve per-case status messages without disrupting the bar, and close the bar when execution ends or fails.
 * A `--dry-run` validates references, rules provenance, and selection without network access or needing credentials. It never reports model accuracy.
 * Each call receives only the natural-language rules, output instructions, and the case's `input`. Exclude expected output and scenario metadata.

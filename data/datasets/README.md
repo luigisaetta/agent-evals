@@ -32,7 +32,7 @@ Each record contains:
 
 Use the 20 `development` cases for prompt development and the 80 `evaluation` cases for held-out evaluation. Each scenario contributes two development and eight evaluation cases. Metadata and reference outputs are for the evaluation runner, not the model prompt. Running all 100 is possible, but mixing development and held-out cases must be reported explicitly.
 
-The shape is ready for future Langfuse dataset import: map `input`, `expected_output`, and `metadata` to their corresponding fields and preserve the case ID through the importer. No upload or OCI call has been performed. A future evaluator compares the model's `selected_offer_id` with `expected_output.expected_offer_id`.
+The [evaluation runner](../../docs/evaluation.md) maps `input`, `expected_output`, and `metadata` to Langfuse dataset fields and preserves the local case ID in item metadata. It uploads only the cases selected for a live run, invokes OCI Responses, and compares the model's `selected_offer_id` with `expected_output.expected_offer_id`. A one-case development smoke test has verified this integration; the checked-in dataset remains the reproducible source for all 100 cases.
 
 ## Regeneration and verification
 

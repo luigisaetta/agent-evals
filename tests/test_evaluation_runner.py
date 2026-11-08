@@ -150,11 +150,24 @@ def test_all_failures_have_no_valid_accuracy():
     assert summary["success_rate_all_attempts"] == 0 and summary["unattempted_count"] == 1
 
 
+@pytest.mark.parametrize("arguments", [[], ["--experiment-name", ""], ["--experiment-name", "   "]])
+def test_experiment_name_is_required_before_execution(arguments):
+    """Reject missing or blank experiment names even during offline validation."""
+    with pytest.raises(SystemExit) as error:
+        main(arguments + ["--dry-run"])
+    assert error.value.code == 2
+
+
+def test_run_name_alias_remains_supported():
+    """Keep existing commands usable while requiring an explicit name."""
+    assert main(["--run-name", "Compatibility check", "--dry-run", "--limit", "1"]) == 0
+
+
 def test_case_selection_dry_run_and_provenance(tmp_path, capsys):
     """Check split counts, offline execution and mismatched rule rejection."""
     assert len(load_cases(DATASET, RULES, "evaluation", None)) == 80
     assert len(load_cases(DATASET, RULES, "all", None)) == 100
-    assert main(["--dry-run", "--split", "all"]) == 0
+    assert main(["--experiment-name", "validation", "--dry-run", "--split", "all"]) == 0
     assert "100 cases" in capsys.readouterr().out
     with pytest.raises(ValueError, match="positive"):
         load_cases(DATASET, RULES, "evaluation", 0)
@@ -216,6 +229,8 @@ def test_langfuse_experiment_is_sequential_and_flush_failure_is_reported(monkeyp
         yield generation
 
     def experiment(**kwargs):
+        assert kwargs["name"] == "My named experiment"
+        assert kwargs["run_name"] == "test"
         assert kwargs["max_concurrency"] == 1
         result = kwargs["task"](item=SimpleNamespace(metadata={"case_id": case["id"]}))
         evaluations = kwargs["evaluators"][0](output=result, expected_output=case["expected_output"])
@@ -225,7 +240,8 @@ def test_langfuse_experiment_is_sequential_and_flush_failure_is_reported(monkeyp
     client.start_as_current_observation.side_effect = observation
     client.run_experiment.side_effect = experiment
     client.flush.side_effect = RuntimeError("private error")
-    metadata = {"run_id": "test", "run_name": "test", "model": "test-model", "instructions": "rules",
+    metadata = {"run_id": "test", "run_name": "test", "experiment_name": "My named experiment",
+                "model": "test-model", "instructions": "rules",
                 "max_output_tokens": 2048, "dataset_name": "test-dataset"}
     summary = run_cases([case], lambda task: _response(case["expected_output"]["expected_offer_id"]),
                         0, tmp_path / "run", metadata, client, [object()])
