@@ -160,3 +160,7 @@ This confirms the integration on one development case. A full-dataset accuracy r
 * [Dataset generation specification](specs/synthetic-dataset.md)
 * [Evaluation runner specification](specs/evaluation-runner.md)
 * [Changelog](CHANGELOG.md)
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
