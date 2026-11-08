@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* 2026-11-08: Reframe the README around exploring systematic agent evaluation, presenting the reusable method and Langfuse workflow before Express Order as the concrete demonstration task.
 * 2026-11-08: Add a detailed English guide explaining the role of evals in agentic development, the demo workflow, synthetic dataset design, OCI integration, Langfuse usage, and adaptation to other tasks, with GitHub repository references.
 * 2026-11-08: Add the MIT License with copyright attribution to Luigi Saetta and link it from the README.
 * 2026-11-08: Separate reusable OCI/Langfuse execution from task adapters; add --task module selection, isolate Express Order validation/prompt/parsing/scoring, and verify reuse with a classification fixture. Introduce generic result schema v2 and document how to add another use case.

@@ -1,107 +1,118 @@
-# Agent Evals: Automotive Express Order
+# Agent Evals
 
-**Measure how reliably an LLM selects the best supplier offer using natural-language business rules.**
+**A practical exploration of systematic evaluation for AI agents.**
 
-This demo takes an automotive procurement decision from a synthetic test case to a scored experiment in Langfuse. The model runs on **OCI Generative AI through the Responses API**. An independent Python reference selector supplies the correct answers, making every selection directly verifiable.
+This project explores how to define, run, and interpret evaluations of an agent's performance using a concrete business example. It brings together explicit expectations, reproducible test cases, model execution, automated scoring, and experiment tracking to make agent behavior measurable and inspectable.
 
-**100 cases · 6 offers per case · 10 scenarios · 50 suppliers · 100 parts · 10 plant locations**
+The initial implementation evaluates one well-defined task within an agent. Models are invoked through **OCI Generative AI Responses API**, while **Langfuse** connects test cases, execution traces, and scores. A reusable Python runner separates the evaluation workflow from the business-specific task.
 
-## The business problem
+**Define expectations → build a dataset → execute the task → score outcomes → inspect and compare experiments.**
 
-A car manufacturer operates multiple plants. When a plant's stock of a production part drops, it initiates an **Express Order** and invites suppliers to submit offers. The agent identifies the best offer for the requested part, destination, and delivery deadline.
+## What we want to explore
 
-The demo focuses on **offer selection**. Requests and collected offers are supplied as JSON; stock monitoring, supplier invitations, purchase-order placement, and delivery execution are outside its scope. Plant destinations are represented by European cities, including Rome.
+The objective is to understand how evals can support the development of agentic solutions:
 
-The selection rules are simple and inspectable:
+* **Define correctness.** Translate a business requirement into an input/output contract and observable success criteria.
+* **Build useful test cases.** Cover normal behavior, constraints, boundary conditions, and likely failure modes.
+* **Measure behavior systematically.** Evaluate a set of cases with explicit scoring rather than relying on a few successful interactions.
+* **Investigate failures.** Distinguish incorrect decisions, invalid responses, infrastructure failures, and evaluator errors.
+* **Compare changes.** Use the same cases and evaluator definitions to assess different prompts, models, or implementations.
+* **Reuse the approach.** Adapt the task-specific parts while retaining the execution and observability pipeline.
 
-1. Match the requested **part ID** and **delivery city** exactly.
-2. Deliver **strictly before** the deadline. Delivery on the deadline is excluded.
-3. Choose the eligible offer with the **lowest total cost in euros**.
-4. If costs are equal, choose the **earliest delivery date**.
+The current eval measures task correctness and execution outcomes. It also records per-case latency and available token usage for inspection. It does not calculate monetary inference cost or provide a comprehensive benchmark of an entire agent.
 
-Every offer identifies its supplier. Supplier identity does not affect ranking. Each generated case has at least one eligible offer and a unique winner.
+## The evaluation workflow
 
-## What the demo demonstrates
+A useful eval starts with the expected behavior, before the first model call. This repository implements the following loop:
 
-The goal is to build a reproducible evaluation workflow for an agent with a well-defined task:
-
-* **Separate rules from code.** The model reads a [natural-language rule file](rules/offer-selection.md).
-* **Create reliable ground truth.** A [deterministic reference selector](src/agent_evals/selection.py) labels and validates the synthetic dataset. The LLM makes its own selection during evaluation.
-* **Exercise specific failure modes.** Cases include cheap but ineligible offers, excluded deadline dates, cost ties, and one-cent differences.
-* **Compare experiments.** Record model outputs, traces, and scores in Langfuse to assess changes to models or prompts on the same cases.
-
-This task has an exact reference answer, so evaluation uses a Python comparison rather than an LLM judge. It provides a small, understandable setting for studying rule adherence and evaluation design.
-
-## From dataset to experiment
+1. **Specify the task and rules.** Make inputs, constraints, outputs, and success criteria explicit.
+2. **Create reference cases.** Store test inputs and independently established expected outcomes separately.
+3. **Separate development and evaluation.** Use development cases for iteration and held-out cases for assessment.
+4. **Run a named experiment.** Execute the model-backed task with recorded configuration and controlled request pacing.
+5. **Validate and score each answer.** Keep parsing, domain correctness, and execution failures distinguishable.
+6. **Inspect the evidence.** Review aggregate metrics, individual failures, and their traces before deciding what to change.
 
 ```mermaid
 flowchart LR
-    C["Synthetic catalogs"] --> G["Dataset generator"]
-    O["Python reference selector"] --> G
-    G --> D["Inputs + expected answers"]
-    D --> R["Evaluation runner"]
-    B["Natural-language rules"] --> R
-    R <-->|"Responses API + OCI IAM"| M["OCI Generative AI"]
-    R --> L["Langfuse: datasets, traces, scores"]
-    R --> F["Local results + summary"]
+    D["Versioned test inputs"] --> T["Agent/task under test on OCI"]
+    B["Task instructions and rules"] --> T
+    T --> E["Parse and evaluate outcomes"]
+    R["Expected outcomes"] --> E
+    E --> L["Langfuse experiments, traces and scores"]
+    E --> F["Local results and summaries"]
 ```
 
-Only the rules and case input go to the model. Expected answers and scenario metadata stay with the evaluation runner.
+Expected outcomes and scenario metadata stay outside the model prompt. The current task has exact reference answers, so scoring uses deterministic Python code. The LLM makes the decision being evaluated.
 
-## Reuse the pipeline for another task
+Offline software tests and live evals provide different evidence: tests check that the generator, parser, scorer, and runner work correctly; live experiments measure whether the model-backed task produces the expected business results.
 
-OCI access, pacing, progress, results, diagnostics, and Langfuse tracking are shared. Express Order-specific validation, prompt construction, response parsing, and scoring live in [one task adapter](src/agent_evals/tasks/offer_selection.py).
+## What Langfuse adds
 
-To adapt the pipeline, supply a task module exporting `TASK`, a rules file, and a dataset with its manifest. Select the module with `--task`; existing commands default to Express Order. A separate classification fixture verifies the same pipeline with plain text inputs, label outputs, and a different score name.
+Langfuse makes an experiment inspectable beyond its final aggregate score. In this implementation it holds:
 
-See [Adapting the runner to another task](docs/adapting-tasks.md) for the four callbacks, examples, and the version 2 result format. The reusable contract currently supports binary correctness scoring.
-
-## Dataset and scoring
-
-The [synthetic dataset](data/datasets/express-order-v1.json) contains **100 cases with six offers each**, generated from the local catalogs using a fixed seed. Every part is requested once; each plant city appears in ten requests. Supplier names and costs are illustrative, and the locations represent hypothetical plants.
-
-| Scenario | Cases |
-| --- | ---: |
-| All offers eligible, with distinct costs | 10 |
-| A cheaper offer has the wrong part | 10 |
-| A cheaper offer has the wrong delivery city | 10 |
-| A cheaper offer delivers on the excluded deadline | 10 |
-| A cheaper offer delivers after the deadline | 10 |
-| Two offers tie on lowest cost | 10 |
-| Three offers tie on lowest cost | 10 |
-| Lower cost wins over earlier delivery | 10 |
-| A one-cent price difference decides the winner | 10 |
-| Mixed eligibility failures leave one valid offer | 10 |
-
-Offer order is shuffled and winning positions are balanced. The split reserves **20 development cases** for prompt work and **80 held-out evaluation cases**, with every scenario represented in both. Cases with no eligible offer or an unresolved cost-and-date tie are excluded from this initial dataset.
-
-The model returns `{"selected_offer_id": "..."}`. The evaluator compares it with `expected_output.expected_offer_id`:
-
-* **1** for an exact match; **0** for a different valid selection.
-* **Selection accuracy:** correct selections divided by valid scored cases.
-* **Overall success rate:** correct selections divided by all attempted cases.
-
-Malformed output, unknown offer IDs, and API failures are reported separately and cannot count as successes. Summaries include attempt, failure, and unattempted counts. No experiment-level pass threshold has been set.
-
-## Tools and Langfuse integration
-
-| Tool | Role in the demo |
+| Artifact | Purpose |
 | --- | --- |
-| Python 3.11 and Conda | Local development and experiment execution |
+| Hosted dataset items | Connect case inputs, expected outputs, and scenario metadata |
+| Named experiments | Identify executions and compare changes on the same cases |
+| Generation traces | Inspect instructions, inputs, raw outputs, model identity, and available token usage |
+| Correctness scores | Record whether each scored answer meets the task's expectation |
+| Validity and status scores | Separate valid output from model, API, and evaluator failures |
+
+The runner publishes a task-specific correctness metric alongside shared `valid_output` and `execution_status` scores. Local JSONL results and a summary preserve attempt counts and metric denominators, so failed or unattempted cases remain visible.
+
+Dataset item identifiers are stable across repeated uploads. Each execution has a unique run identifier and records task, model, dataset, rules, prompt, and code provenance. Calls are sequential, with a configurable pause between invocations.
+
+The initial destination is Langfuse Cloud. Its URL and keys are configurable for a future self-hosted instance on OCI. See the [detailed guide to evals and Langfuse](https://github.com/luigisaetta/agent-evals/blob/main/docs/evals-for-agentic-solutions.md) for the full workflow and how to interpret the results.
+
+## A concrete example: Automotive Express Order
+
+The first demonstration considers a car manufacturer with multiple plants. Reduced part availability triggers an Express Order, suppliers submit offers, and the agent selects the best offer for a requested part, delivery city, and deadline.
+
+We evaluate **offer selection**, one task within that broader workflow. The rules require the correct part and destination, delivery strictly before the deadline, the lowest eligible total cost in euros, and the earliest delivery as the price tie-breaker.
+
+This example provides a decision with a precise reference answer. A [deterministic reference selector](https://github.com/luigisaetta/agent-evals/blob/main/src/agent_evals/selection.py) establishes labels during dataset generation; the model independently selects an offer during evaluation. No LLM judge is needed for this task.
+
+The synthetic dataset contains **100 cases with six offers each**, organized into ten scenarios. It includes cheaper but ineligible offers, delivery-date boundaries, cost ties, one-cent differences, and cases with only one eligible offer. Cases use fictional suppliers, automotive parts with illustrative costs, and hypothetical plant locations.
+
+* **20 development cases** support prompt iteration.
+* **80 held-out evaluation cases** are the default live test split.
+* Offer order is shuffled and winning positions are balanced.
+* Initial cases have a unique winner; no-eligible-offer outcomes and unresolved ties require additional policy.
+
+For valid answers, an exact reference match scores **1** and a different answer scores **0**. The summary reports **accuracy over valid scored cases** and **success rate over all attempts**, together with failure and unattempted counts. No experiment-level acceptance threshold has been set.
+
+The [task specification](https://github.com/luigisaetta/agent-evals/blob/main/specs/offer-selection.md) and [dataset documentation](https://github.com/luigisaetta/agent-evals/blob/main/data/datasets/README.md) contain the domain details. Stock monitoring, supplier invitations, purchasing, and delivery execution are outside this example's evaluated scope.
+
+## Reuse the pipeline for another use case
+
+The shared runner handles dataset envelopes, provenance checks, OCI access, pacing, logging, progress, result files, and Langfuse integration. Business-specific behavior is confined to a task adapter:
+
+| Adaptation point | Responsibility |
+| --- | --- |
+| `validate_case` | Validate the domain input and stored reference |
+| `build_instructions` | Construct the task prompt and response contract |
+| `parse_output` | Parse and validate the model's answer |
+| `score_output` | Compare the answer with the expected outcome |
+
+A new use case supplies that module, a rules file, and a dataset with its manifest. Select it using `--task`; existing commands use the Express Order adapter by default. A classification fixture verifies reuse with text inputs, label outputs, and another metric.
+
+The current contract supports **binary correctness scoring**, local JSON datasets, and OCI Responses. Other scoring schemes, providers, and complete multi-step agent trajectories would require explicit extensions. See [Adapting the runner to another task](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md).
+
+## Tools used
+
+| Tool | Responsibility |
+| --- | --- |
+| Python 3.11 and Conda | Local development, data generation, and experiment execution |
 | OCI Generative AI Responses API | Model inference using the configured region, model, and project |
-| OpenAI Python SDK, HTTPX, and `oci-genai-auth` | Responses client with OCI IAM signing through `~/.oci/config` |
-| Langfuse Cloud and Python SDK | Hosted datasets, experiments, generation traces, and evaluation scores |
-| JSON catalogs and datasets | Inspectable synthetic inputs and reference answers |
-| pytest | Offline correctness, coverage, and integration-contract tests |
-| tqdm | Evaluation progress alongside per-case status messages |
+| OpenAI Python SDK, HTTPX, and `oci-genai-auth` | Responses interface with OCI IAM signing through `~/.oci/config` |
+| Langfuse Cloud and Python SDK | Datasets, experiments, generation traces, and scores |
+| JSON datasets and manifests | Inspectable test cases, expected outcomes, and provenance |
+| pytest | Offline correctness, coverage, and cross-task integration tests |
+| tqdm and initialization logs | Experiment progress and visibility into preparation steps |
 
-Langfuse receives the selected dataset cases, their expected outputs, model traces, and scores: `selection_correct`, `valid_output`, and `execution_status`. Experiments can be inspected and compared in its UI. Local JSONL results and a summary are also saved for every run.
+## Try the current demo
 
-The runner uploads only the selected cases and uses stable dataset-item identifiers for repeat runs. It executes one model call at a time, with a configurable pause between calls, including after failures. Langfuse Cloud is the initial destination; its configurable URL supports a future self-hosted instance on OCI.
-
-## Try it
-
-Run commands from the repository root. If the environment does not exist, create it first:
+Run commands from the repository root. Create the environment if it does not exist, then activate it and install dependencies:
 
 ```sh
 conda create -n agent-evals python=3.11
@@ -109,59 +120,57 @@ conda activate agent-evals
 python -m pip install -r requirements.txt
 ```
 
-### 1. Check the code and dataset offline
+### 1. Check the implementation and data offline
 
-These checks make no model calls or Langfuse uploads and need no credentials:
+These checks need no credentials and make no OCI calls or Langfuse uploads:
 
 ```sh
 python -m pytest -q
-PYTHONPATH=src python -m agent_evals.evaluate --experiment-name validation --dry-run --split all
+./run_experiment.sh "Offline validation" --dry-run --split all
 ```
 
-### 2. Configure live access
+### 2. Configure the services
 
-Create `.env` using [.env.example](.env.example) as a reference. Set `OCI_REGION`, `OCI_MODEL`, `OCI_PROJECT_ID`, and your Langfuse URL and keys. Configure an OCI user-principal signing profile in `~/.oci/config`; the default profile is `DEFAULT`.
+Create `.env` using [.env.example](https://github.com/luigisaetta/agent-evals/blob/main/.env.example) as a reference. Set `OCI_REGION`, `OCI_MODEL`, `OCI_PROJECT_ID`, and the Langfuse URL and keys. Configure an OCI signing profile in `~/.oci/config`; the default profile is `DEFAULT`.
 
-Inference authenticates with the OCI signing key referenced by that profile. See the [setup guide](docs/evaluation.md) for permissions, variables, and supported client versions. `.env` and generated run outputs are ignored by Git.
+OCI inference uses the signing key referenced by that profile. Actual credentials and generated run outputs are excluded from Git. The [execution guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/evaluation.md) covers the settings and access requirements.
 
-### 3. Run a development smoke test
+### 3. Verify one development case
 
-This invokes OCI and publishes one selected synthetic case and its evaluation to Langfuse:
+This invokes OCI and publishes the selected case, execution, and scores to Langfuse:
 
 ```sh
-./run_experiment.sh "Express Order smoke test" --split development --limit 1
+./run_experiment.sh "Development smoke test" --split development --limit 1
 ```
 
-### 4. Evaluate the held-out cases
+### 4. Run the held-out evaluation
 
 ```sh
-./run_experiment.sh "Express Order baseline" --split evaluation --sleep-seconds 5
+./run_experiment.sh "Baseline evaluation" --split evaluation --sleep-seconds 5
 ```
 
-The root-level `run_experiment.sh` requires the experiment name as its first argument and forwards the remaining options to the Python CLI in the `agent-evals` Conda environment. The Python CLI requires `--experiment-name` (`--run-name` is an alias), including for dry runs. This name is used unchanged as the Langfuse experiment name; each execution has a unique run-name suffix.
+An experiment name is mandatory. The default dataset split runs **80 evaluation cases**; `--split all` runs all 100 cases, explicitly combining development and evaluation data. `--no-langfuse` keeps OCI execution and local results without contacting Langfuse.
 
-The runner defaults to the 80 evaluation cases. Use `--split all` to explicitly include all 100 cases, or `--no-langfuse` for OCI evaluation with local results only. Set `EVAL_SLEEP_SECONDS` in `.env` to change the default two-second pause; `--sleep-seconds` overrides it.
+The pause defaults to **two seconds**, configurable with `EVAL_SLEEP_SECONDS` and overridden by `--sleep-seconds`. There is no pause before the first invocation.
 
-Results are saved under `data/runs/<run-id>/` as `metadata.json`, `results.jsonl`, and `summary.json`. Version 2 results store task answers in `output` and references in `expected_output`; summaries report `accuracy`, task identity, and metric name. The summary includes the Langfuse experiment URL when available. Publication is marked `submitted_unverified` until persistence is independently checked; ingestion is asynchronous.
+Results are written to `data/runs/<run-id>/` as `metadata.json`, `results.jsonl`, and `summary.json`. Result schema version 2 stores parsed answers in `output`, references in `expected_output`, and summary correctness in `accuracy`. The summary includes the Langfuse experiment URL when available. `submitted_unverified` indicates submission without an independent persistence check; ingestion is asynchronous.
 
-## Validation status
+## Evidence and current scope
 
-As of **2026-11-08**, **56 automated tests pass**, including cross-task execution with mocked OCI and Langfuse clients. Before the reusable-task refactor, a one-case development smoke test successfully called OCI Responses using IAM signing, selected the expected offer, and published the dataset item, experiment, and scores to Langfuse. Persistence was verified through its read API. The refactor has been verified offline; no new live run has been performed for it.
+As of **2026-11-08**, **56 automated tests pass**, including cross-task execution with mocked OCI and Langfuse clients. A one-case live integration test before the reusable-task refactor verified OCI IAM inference, a correct decision, and persisted Langfuse scores. The refactor has been verified offline.
 
-This confirms the integration on one development case. A full-dataset accuracy result has not yet been measured.
+This repository is an exploration of the evaluation method, supported by a concrete implementation. It does not claim a full-agent performance benchmark. Extending the evidence to a complete agent would require evaluating its other responsibilities and interactions, using representative cases and agreed acceptance criteria.
 
-## Explore the project
+## Further reading
 
-* [Why evals matter: the demo, synthetic data, Langfuse workflow, and reuse](https://github.com/luigisaetta/agent-evals/blob/main/docs/evals-for-agentic-solutions.md)
-* [Evaluation setup, outputs, and operational details](docs/evaluation.md)
-* [Adding another use case with a task adapter](docs/adapting-tasks.md)
-* [Dataset coverage, format, and regeneration](data/datasets/README.md)
-* [Supplier, part, and plant-location catalogs](data/catalogs/README.md)
-* [Task specification and JSON example](specs/offer-selection.md)
-* [Dataset generation specification](specs/synthetic-dataset.md)
-* [Evaluation runner specification](specs/evaluation-runner.md)
-* [Changelog](CHANGELOG.md)
+* [Evals for agentic solutions: motivation, implementation, synthetic data, and Langfuse](https://github.com/luigisaetta/agent-evals/blob/main/docs/evals-for-agentic-solutions.md)
+* [Running and interpreting experiments](https://github.com/luigisaetta/agent-evals/blob/main/docs/evaluation.md)
+* [Adapting the pipeline to another task](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md)
+* [Synthetic dataset and generation](https://github.com/luigisaetta/agent-evals/blob/main/data/datasets/README.md)
+* [Reference catalogs](https://github.com/luigisaetta/agent-evals/blob/main/data/catalogs/README.md)
+* [Reusable evaluation specification](https://github.com/luigisaetta/agent-evals/blob/main/specs/reusable-evaluation.md)
+* [Changelog](https://github.com/luigisaetta/agent-evals/blob/main/CHANGELOG.md)
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](https://github.com/luigisaetta/agent-evals/blob/main/LICENSE).

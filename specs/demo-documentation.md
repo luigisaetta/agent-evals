@@ -2,11 +2,12 @@
 
 ## Objective and scope
 
-Prepare the main English README for a public repository audience. Explain the Automotive Express Order problem, demo objectives, exact-match evaluation design, OCI Responses authentication, and Langfuse's role. Present the existing implementation without publishing the repository or promising unimplemented features.
+Prepare the main English README for a public repository audience. Lead with the project's objective: explore systematic evaluation of an agent's performance through a concrete, reproducible example. Present the evaluation method, questions it helps investigate, tools and reusable pipeline before introducing Automotive Express Order as the initial demonstration. Preserve a clear distinction between evaluating one task and validating an entire agent. Describe implemented behavior without promising unimplemented features or changing publication state.
 
 ## Acceptance criteria
 
-* Open with a clear demo proposition and the 100-case, six-offer dataset.
+* Open with the general evaluation objective and learning outcomes. Introduce the 100-case, six-offer dataset as supporting evidence for the concrete example, rather than the project's identity.
+* Explain performance in terms of the measured correctness and execution outcomes; distinguish recorded latency/token usage from unimplemented cost calculations or comprehensive performance benchmarks.
 * Explain business rules, deterministic reference labels, held-out cases, and failure accounting.
 * Distinguish offline software tests, dataset validation, and live OCI evaluations.
 * Describe the implemented tools and workflow, including Langfuse datasets, traces, scores, and experiment comparison.
