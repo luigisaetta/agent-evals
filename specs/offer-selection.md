@@ -14,7 +14,7 @@ Evaluate whether an LLM-based agent can select the best offer for an automotive 
 
 The agent receives a request identifying a spare part, a delivery city, an exclusive delivery deadline, and N structured JSON offers. Offers may differ from the requested part or city and must be filtered according to the rules. It loads the rule text and selects an offer using an OCI Generative AI model through the Responses API. The evaluator compares the selected offer with the expected offer recorded in the dataset.
 
-This specification defines the task, data contract, and success criterion. The natural-language business rules are maintained in [rules/offer-selection.md](../rules/offer-selection.md), version `1.1`. Implementation and dataset creation are subsequent work.
+This specification defines the task, data contract, and success criterion. The natural-language business rules are maintained in [rules/offer-selection.md](../rules/offer-selection.md), version `1.1`. The reference selector and initial dataset are described in [the synthetic dataset specification](synthetic-dataset.md); LLM agent implementation remains subsequent work.
 
 ## Input and output contract
 

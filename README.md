@@ -33,6 +33,8 @@ Initial cases have at least one eligible offer and a unique winner after these r
 
 * [Task specification and JSON example](specs/offer-selection.md)
 * [Catalog specification and data provenance](specs/catalogs.md)
+* [Synthetic dataset specification](specs/synthetic-dataset.md)
+* [100-case dataset, coverage, and regeneration instructions](data/datasets/README.md)
 * [Natural-language selection rules, version 1.1](rules/offer-selection.md)
 * [Repository working rules](AGENTS.md)
 * [Changelog](CHANGELOG.md)
@@ -45,4 +47,4 @@ Use the `agent-evals` Conda environment:
 conda activate agent-evals
 ```
 
-The project currently contains documentation, specifications, and [synthetic reference catalogs](data/catalogs/README.md): 50 suppliers, 100 automotive parts with average costs in euros, and 10 European capital cities representing plant locations. Agent implementation, evaluation datasets, dependencies, and Langfuse integration will follow.
+The project includes [synthetic reference catalogs](data/catalogs/README.md), a deterministic reference selector, and a [100-case dataset with six offers per case](data/datasets/README.md). Run `PYTHONPATH=src python -m agent_evals.generate_dataset` to regenerate the dataset and `python -m pytest` to verify selection and dataset coverage, after installing `requirements.txt` in the Conda environment. The selector creates reference labels; it does not replace the LLM under evaluation. Agent implementation, OCI execution, and Langfuse integration will follow.

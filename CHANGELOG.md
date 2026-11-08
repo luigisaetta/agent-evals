@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* 2026-11-08: Add the deterministic offer-selection oracle, reproducible 100-case dataset with six offers per case across ten scenarios, development/evaluation splits, provenance manifest, and automated correctness and coverage checks. OCI execution and Langfuse publication remain future work.
 * 2026-11-08: Add synthetic JSON reference catalogs with 50 suppliers, 100 automotive parts and indicative average unit costs in euros, and 10 European capital plant locations including Rome; document provenance and catalog contracts.
 * 2026-11-08: Add the Automotive Express Order business context, multi-plant stock-replenishment workflow, and evaluation boundary limited to offer selection; retain the current city-based destination contract and ranking rules.
 * 2026-11-08: Require `supplier_id` on every offer, update the JSON example, and advance the rules to version 1.1 without changing ranking criteria.

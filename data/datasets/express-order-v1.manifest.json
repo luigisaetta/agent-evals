@@ -1,0 +1,41 @@
+{
+  "dataset_version": "1.0",
+  "rules_version": "1.1",
+  "seed": 42,
+  "date_origin": "2027-01-01",
+  "case_count": 100,
+  "offers_per_case": 6,
+  "dataset_sha256": "1ed5c0b7145f7d5858e9e9d4c26a2e6803ff987051ecb968e5716921ec4cbff7",
+  "source_sha256": {
+    "catalogs/suppliers.json": "752d2a273138e608901ba4415e740c31044a802c087929dedc6050826d1e4390",
+    "catalogs/parts.json": "158ffedaf5190c6ccd76ecd14d14f8cc2cad19b074bb6dff5483332742d97a90",
+    "catalogs/locations.json": "de5ca07dd5060486b8498784cc6118f51f7aeda13d914e626683ca20b4d2a791",
+    "rules/offer-selection.md": "74103a81bebe161271873e8f23ba186f844509981340dbdd72a849038daa35a4",
+    "code/generate_dataset.py": "e24c09f912f0374710e3b761d47d9263ab5d3b96bcc2238ac6ab222725331673",
+    "code/selection.py": "ba9dc9ccffa56d968cef7220cdcb6915cf1dc32bf2fbeb3af4aab44d819d8736"
+  },
+  "scenario_counts": {
+    "all_eligible": 10,
+    "cost_before_speed": 10,
+    "deadline_day_cheaper": 10,
+    "late_cheaper": 10,
+    "mixed_filters_single_eligible": 10,
+    "one_cent_margin": 10,
+    "three_way_cost_tie": 10,
+    "two_way_cost_tie": 10,
+    "wrong_city_cheaper": 10,
+    "wrong_part_cheaper": 10
+  },
+  "split_counts": {
+    "development": 20,
+    "evaluation": 80
+  },
+  "winner_position_counts": {
+    "1": 17,
+    "2": 17,
+    "3": 17,
+    "4": 17,
+    "5": 16,
+    "6": 16
+  }
+}
