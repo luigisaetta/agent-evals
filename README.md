@@ -152,6 +152,7 @@ This confirms the integration on one development case. A full-dataset accuracy r
 
 ## Explore the project
 
+* [Why evals matter: the demo, synthetic data, Langfuse workflow, and reuse](https://github.com/luigisaetta/agent-evals/blob/main/docs/evals-for-agentic-solutions.md)
 * [Evaluation setup, outputs, and operational details](docs/evaluation.md)
 * [Adding another use case with a task adapter](docs/adapting-tasks.md)
 * [Dataset coverage, format, and regeneration](data/datasets/README.md)

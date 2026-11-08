@@ -17,3 +17,7 @@ Prepare the main English README for a public repository audience. Explain the Au
 ## Verification
 
 Review the README against CLI arguments, dependency declarations, dataset metadata, and recorded integration evidence. Check relative links and Markdown fences. This documentation-only change does not require new unit tests or live model calls.
+
+## Explanatory guide
+
+Add `docs/evals-for-agentic-solutions.md` as a structured English guide covering the importance of agent evaluations, the demo's task-level objective, implementation steps, deterministic synthetic generation and reference answers, OCI and other tools, detailed Langfuse dataset/experiment/trace/score usage, and adaptation to another task. Explain metric denominators, failure categories, scope limits, and the difference between implemented behavior and future extensions. Use GitHub repository URLs for project references, link the guide from the README, and verify claims against source code and the dataset manifest.
