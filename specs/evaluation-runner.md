@@ -4,6 +4,10 @@
 
 Implement a readable, sequential Python runner for the existing Express Order dataset. Keep configuration, OCI model access, evaluation, and Langfuse publication in small modules. Use Google-style docstrings. The oracle supplies reference labels during dataset generation and testing; evaluation startup does not recompute them.
 
+The shared pipeline now uses the [reusable task contract](reusable-evaluation.md). Express Order is the default adapter; task schemas, prompts, parsing, scoring, titles and dataset namespaces are configured in the selected module. New local results use schema version 2 with generic output/reference fields and `accuracy`.
+
+Keep reusable API/transport error classification in `agent_evals.errors`, independent of dataset evaluation and scoring. The runner imports `describe_api_error` from that module. Preserve its return fields, categories, and credential-safe behavior; verify the extraction with the existing failure-handling tests.
+
 ## Configuration and authentication
 
 Read `.env` without overriding existing environment variables. Use the existing names `OCI_REGION`, `OCI_MODEL`, `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY`, and `LANGFUSE_SECRET_KEY`. OCI IAM signing uses `OciUserPrincipalAuth`, the key referenced by `~/.oci/config`, and profile `DEFAULT`. Allow `OCI_CONFIG_FILE` and `OCI_PROFILE` overrides. Do not use a provider API key. The OpenAI SDK's required `api_key="not-used"` is only a placeholder; the HTTP client signs requests using OCI credentials.
@@ -15,14 +19,14 @@ Use `EVAL_SLEEP_SECONDS` (default 2) with a `--sleep-seconds` override. Require 
 ## Execution and outputs
 
 * CLI requires a non-blank `--experiment-name` (`--run-name` remains an alias), including for dry runs. Pass the supplied name unchanged as the Langfuse experiment name and record it in local metadata. Keep a unique run-name suffix and local run identifier so repeated executions remain distinct.
-* CLI supports dataset/rules paths, split (`evaluation` by default, `development`, or `all`), positive case limit, local output directory, and disabling Langfuse.
+* CLI supports `--task` to select a trusted adapter module, task-default or overridden dataset/rules paths, split (`evaluation` by default, `development`, or `all`), positive case limit, local output directory, and disabling Langfuse.
 * Provide an executable root-level `run_experiment.sh EXPERIMENT_NAME [OPTIONS...]` wrapper that runs Python in the `agent-evals` Conda environment from the repository root and forwards CLI options and exit status. Names containing spaces must be supported. Missing or blank names must fail before any service call.
 * Show a `tqdm` progress bar over the selected cases for both local and Langfuse runs. Advance after every persisted attempt, including failures, preserve per-case status messages without disrupting the bar, and close the bar when execution ends or fails.
 * A `--dry-run` validates dataset structure, reference ID membership, and dataset/rules hashes without network access or needing credentials. It never recomputes reference winners or reports model accuracy.
 * Print numbered English initialization activities immediately, followed by `OK` and elapsed seconds on completion or `FAILED` on errors. Cover dataset checks, configuration, rules/metadata preparation, OCI signing client creation, Langfuse client/authentication/dataset setup, and uploading the selected cases. Do not print credentials. Mark the transition to evaluation explicitly.
-* Display a compact project banner before the first initialization log, including for dry runs. Include the Agent Evals name, Automotive Express Order use case, and OCI Responses/Langfuse tools; keep it readable without terminal colors.
+* Display a compact project banner before the first initialization log, including for dry runs. Include the Agent Evals name, selected task title, and OCI Responses/Langfuse tools; keep it readable without terminal colors.
 * Each call receives only the natural-language rules, output instructions, and the case's `input`. Exclude expected output and scenario metadata.
-* Require a JSON object with exactly one non-empty `selected_offer_id` referring to a supplied offer. Malformed responses, incomplete generation, and unknown IDs are invalid outputs, distinct from valid but incorrect selections.
+* Delegate output parsing to the task adapter. The default Express Order task requires a JSON object with exactly one non-empty `selected_offer_id` referring to a supplied offer. Malformed responses, incomplete generation, and unknown IDs are invalid outputs, distinct from valid but incorrect answers. Unexpected parser/scorer errors are `evaluator_error`.
 * Record per-case expected/actual IDs, raw model text, status, optional score, usage, latency, and safe error classification. Distinguish invalid outputs from provider errors. Persist each case as JSONL immediately and write an aggregate summary; ignore generated run files in Git.
 * For connection failures, inspect the exception cause chain and report safe DNS, TLS, timeout, proxy, or refused-connection categories in saved results and progress messages. Never expose raw exception text or request headers.
 * Compute selection accuracy over valid scored cases and success rate over all attempts. Report denominators and status counts; no valid results means null accuracy, not a perfect or zero accuracy claim.

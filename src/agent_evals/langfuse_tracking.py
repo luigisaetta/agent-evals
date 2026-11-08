@@ -11,15 +11,20 @@ from langfuse import Evaluation, Langfuse
 
 from agent_evals.config import required_env
 from agent_evals.console import initialization_step
+from agent_evals.task import EvaluationTask
 
 
-def prepare_experiment(cases: list[dict], dataset_hash: str, split: str) -> tuple:
+def prepare_experiment(cases: list[dict], dataset_hash: str, split: str,
+                       task: EvaluationTask, dataset_version: str, rules_version: str) -> tuple:
     """Validate Langfuse access and upsert the selected synthetic cases.
 
     Args:
         cases: Locally validated cases selected for this experiment.
         dataset_hash: SHA-256 of the complete source dataset.
         split: Selected dataset split, or all.
+        task: Task namespace and display settings.
+        dataset_version: Version read from the dataset manifest.
+        rules_version: Version read from the dataset manifest.
 
     Returns:
         Langfuse client, uploaded dataset items and hosted dataset name.
@@ -37,11 +42,13 @@ def prepare_experiment(cases: list[dict], dataset_hash: str, split: str) -> tupl
     with initialization_step(6, "Verify Langfuse authentication"):
         if not client.auth_check():
             raise ValueError("Langfuse authentication failed")
-    name = f"express-order-v1-{split}-{dataset_hash[:12]}"
+    name = f"{task.dataset_namespace}-{split}-{dataset_hash[:12]}"
     with initialization_step(7, "Create or update Langfuse dataset"):
         client.create_dataset(
-            name=name, description="Synthetic Automotive Express Order selection cases",
-            metadata={"dataset_sha256": dataset_hash, "split": split, "rules_version": "1.1"},
+            name=name, description=f"{task.title} evaluation cases",
+            metadata={"dataset_sha256": dataset_hash, "split": split,
+                      "rules_version": rules_version, "dataset_version": dataset_version,
+                      "task_name": task.name, "task_version": task.version},
         )
     items = []
     with initialization_step(8, f"Upload {len(cases)} selected cases to Langfuse"):
@@ -55,23 +62,29 @@ def prepare_experiment(cases: list[dict], dataset_hash: str, split: str) -> tupl
     return client, items, name
 
 
-def selection_evaluator(*, output: dict, expected_output: dict, **kwargs) -> list[Evaluation]:
-    """Score valid selections and separately report execution validity.
+def make_evaluator(metric_name: str):
+    """Create a domain-independent Langfuse adapter for precomputed scores.
 
     Args:
-        output: Task result including status and selected offer ID.
-        expected_output: Dataset reference containing expected_offer_id.
-        **kwargs: Additional fields supplied by the experiment SDK.
+        metric_name: Correctness metric name supplied by the task.
 
     Returns:
-        A validity score for every attempt and exact-match score for valid output.
+        SDK evaluator publishing validity, execution status and binary correctness.
     """
-    valid = output["status"] in {"correct", "incorrect"}
-    scores = [Evaluation(name="valid_output", value=int(valid)),
-              Evaluation(name="execution_status", value=output["status"], data_type="CATEGORICAL")]
-    if valid:
-        scores.append(Evaluation(
-            name="selection_correct",
-            value=int(output["selected_offer_id"] == expected_output["expected_offer_id"]),
-        ))
-    return scores
+    def evaluator(*, output: dict, **kwargs) -> list[Evaluation]:
+        """Map a completed task result to SDK score objects.
+
+        Args:
+            output: Generic case result already parsed and scored by the task.
+            **kwargs: Additional SDK fields; references are not rescored here.
+
+        Returns:
+            Status metrics, plus correctness when a valid score exists.
+        """
+        scores = [Evaluation(name="valid_output", value=int(output["output_valid"])),
+                  Evaluation(name="execution_status", value=output["status"], data_type="CATEGORICAL")]
+        if output["status"] in {"correct", "incorrect"}:
+            scores.append(Evaluation(name=metric_name, value=output["score"]))
+        return scores
+
+    return evaluator

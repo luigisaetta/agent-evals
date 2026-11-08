@@ -2,7 +2,7 @@
 Author: L. Saetta
 Date last modified: 2026-11-08
 License: MIT
-Description: Run sequential OCI offer evaluations with optional Langfuse tracking.
+Description: Run reusable sequential OCI evaluations with task-specific adapters.
 """
 
 import argparse
@@ -11,186 +11,48 @@ from contextlib import nullcontext
 from datetime import datetime, timezone
 import hashlib
 from importlib.metadata import version
+import inspect
 import json
 from pathlib import Path
-import socket
-import ssl
 import time
 from uuid import uuid4
 
 from tqdm import tqdm
-import httpx
 
 from agent_evals.config import ConfigurationError, ROOT, load_settings
 from agent_evals.console import initialization_step, show_banner
-from agent_evals.oci_model import build_instructions, create_client, invoke_model
+from agent_evals.dataset import file_hash, load_cases
+from agent_evals.errors import describe_api_error
+from agent_evals.oci_model import create_client, invoke_model
+from agent_evals.task import EvaluationTask, load_task
 
 
-def file_hash(path: Path) -> str:
-    """Compute a source artifact hash.
-
-    Args:
-        path: File to hash.
-
-    Returns:
-        Hexadecimal SHA-256 digest.
-    """
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def load_cases(dataset_path: Path, rules_path: Path, split: str, limit: int | None) -> list[dict]:
-    """Validate the dataset and select cases before making external calls.
+def task_source_hashes(task: EvaluationTask) -> dict:
+    """Hash source files implementing the selected task, including custom modules.
 
     Args:
-        dataset_path: Dataset JSON file.
-        rules_path: Rules file whose provenance must match the dataset manifest.
-        split: Evaluation, development, or all cases.
-        limit: Optional positive maximum number of cases.
+        task: Task descriptor containing the domain callbacks.
 
     Returns:
-        Selected validated cases in their stored order.
-
-    Raises:
-        ValueError: If schema, labels, provenance, or selection are invalid.
+        Callback-to-source hashes, with null for callbacks without a source file.
     """
-    if split not in {"evaluation", "development", "all"}:
-        raise ValueError("Unknown dataset split")
-    if limit is not None and limit <= 0:
-        raise ValueError("Case limit must be positive")
-    manifest = json.loads(dataset_path.with_suffix(".manifest.json").read_text())
-    if manifest["dataset_sha256"] != file_hash(dataset_path):
-        raise ValueError("Dataset hash differs from its manifest")
-    if manifest["source_sha256"]["rules/offer-selection.md"] != file_hash(rules_path):
-        raise ValueError("Rule contents differ from the dataset's reference rules")
-    cases = json.loads(dataset_path.read_text())
-    if not isinstance(cases, list) or not cases:
-        raise ValueError("Dataset must be a non-empty array")
-    identifiers = set()
-    for case in cases:
-        if not isinstance(case, dict) or set(case) != {"id", "input", "expected_output", "metadata"}:
-            raise ValueError("Invalid dataset case fields")
-        case_id = case["id"]
-        if not isinstance(case_id, str) or not case_id.strip() or case_id in identifiers:
-            raise ValueError("Case identifiers must be unique non-empty strings")
-        identifiers.add(case_id)
-        if set(case["input"]) != {"request", "offers"} or len(case["input"]["offers"]) != 6:
-            raise ValueError(f"Invalid six-offer task input: {case_id}")
-        request = case["input"]["request"]
-        if (not isinstance(request, dict)
-                or not {"part_id", "delivery_location", "latest_delivery_date"}.issubset(request)):
-            raise ValueError(f"Invalid request fields: {case_id}")
-        offers = case["input"]["offers"]
-        required_offer_fields = {"offer_id", "supplier_id", "part_id", "delivery_location",
-                                 "delivery_date", "total_cost_eur"}
-        if not isinstance(offers, list) or any(
-            not isinstance(offer, dict) or not required_offer_fields.issubset(offer)
-            for offer in offers
-        ):
-            raise ValueError(f"Invalid offer fields: {case_id}")
-        identifiers_in_case = [offer["offer_id"] for offer in offers]
-        if (any(not isinstance(identifier, str) or not identifier.strip() for identifier in identifiers_in_case)
-                or len(set(identifiers_in_case)) != len(identifiers_in_case)):
-            raise ValueError(f"Offer identifiers must be unique non-empty strings: {case_id}")
-        if case["metadata"].get("split") not in {"development", "evaluation"}:
-            raise ValueError(f"Missing or invalid split: {case_id}")
-        if case["metadata"].get("rules_version") != manifest["rules_version"]:
-            raise ValueError(f"Rules version mismatch: {case_id}")
-        expected = case["expected_output"]
-        if (not isinstance(expected, dict) or set(expected) != {"expected_offer_id"}
-                or not isinstance(expected["expected_offer_id"], str)
-                or expected["expected_offer_id"] not in {o["offer_id"] for o in case["input"]["offers"]}):
-            raise ValueError(f"Invalid reference offer identifier: {case_id}")
-    selected = [c for c in cases if split == "all" or c["metadata"]["split"] == split]
-    if not selected:
-        raise ValueError("No cases selected")
-    return selected[:limit] if limit is not None else selected
+    hashes = {}
+    for name in ("validate_case", "build_instructions", "parse_output", "score_output"):
+        try:
+            source = inspect.getsourcefile(getattr(task, name))
+        except TypeError:
+            source = None
+        hashes[name] = file_hash(Path(source)) if source and Path(source).is_file() else None
+    return hashes
 
 
-def parse_selection(raw_output: str, task_input: dict) -> str:
-    """Parse a strict selection response and validate its offer identifier.
-
-    Args:
-        raw_output: Model text expected to contain only a JSON object.
-        task_input: Original offers used to validate the returned identifier.
-
-    Returns:
-        Selected offer identifier.
-
-    Raises:
-        ValueError: If JSON, output fields or offer identifier are invalid.
-    """
-    def unique_fields(pairs):
-        """Reject duplicate output keys instead of accepting the last value.
-
-        Args:
-            pairs: JSON object key-value pairs.
-
-        Returns:
-            Object with unique keys.
-
-        Raises:
-            ValueError: If a key appears more than once.
-        """
-        result = {}
-        for key, value in pairs:
-            if key in result:
-                raise ValueError("Duplicate output fields")
-            result[key] = value
-        return result
-
-    if not isinstance(raw_output, str):
-        raise ValueError("Model output must be text")
-    result = json.loads(raw_output, object_pairs_hook=unique_fields)
-    if not isinstance(result, dict) or set(result) != {"selected_offer_id"}:
-        raise ValueError("Expected exactly one selected_offer_id field")
-    selected = result["selected_offer_id"]
-    if not isinstance(selected, str) or selected not in {o["offer_id"] for o in task_input["offers"]}:
-        raise ValueError("Selected offer ID is not present in the input")
-    return selected
-
-
-def describe_api_error(error: Exception) -> dict:
-    """Describe provider failures without exposing raw exception messages.
-
-    Args:
-        error: Provider exception, possibly wrapping a transport failure.
-
-    Returns:
-        Safe exception types, HTTP status and a readable failure category.
-    """
-    status_code = getattr(error, "status_code", None)
-    current = error
-    seen = set()
-    reason = None
-    cause_type = type(error).__name__
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        cause_type = type(current).__name__
-        for exception_type, category in (
-            (socket.gaierror, "DNS resolution failed"),
-            (ssl.SSLError, "TLS certificate or handshake failed"),
-            (httpx.TimeoutException, "Request timed out"),
-            (TimeoutError, "Request timed out"),
-            (httpx.ProxyError, "Proxy connection failed"),
-            (ConnectionRefusedError, "Connection refused"),
-        ):
-            if isinstance(current, exception_type):
-                reason = category
-        current = current.__cause__ or current.__context__
-    return {
-        "type": type(error).__name__,
-        "http_status": status_code if isinstance(status_code, int) else None,
-        "cause_type": cause_type,
-        "reason": reason or cause_type,
-    }
-
-
-def evaluate_case(case: dict, invoke) -> dict:
+def evaluate_case(case: dict, invoke, task: EvaluationTask) -> dict:
     """Invoke and score one case without exposing reference answers to the model.
 
     Args:
         case: Validated dataset case, including the separate reference answer.
         invoke: Callable receiving only the task input and returning response data.
+        task: Domain output parser and binary scorer.
 
     Returns:
         Per-case result with status, optional score and safe error classification.
@@ -198,8 +60,8 @@ def evaluate_case(case: dict, invoke) -> dict:
     started = time.perf_counter()
     result = {
         "case_id": case["id"], "metadata": case["metadata"],
-        "expected_offer_id": case["expected_output"]["expected_offer_id"],
-        "selected_offer_id": None, "status": "api_error", "score": None,
+        "expected_output": case["expected_output"],
+        "output": None, "output_valid": False, "status": "api_error", "score": None,
         "raw_output": None, "usage": {}, "error": None,
     }
     try:
@@ -211,14 +73,26 @@ def evaluate_case(case: dict, invoke) -> dict:
         try:
             if response["response_status"] != "completed":
                 raise ValueError("Response did not complete")
-            selected = parse_selection(response["raw_output"], case["input"])
-        except (ValueError, TypeError, KeyError):
+            output = task.parse_output(response["raw_output"], case["input"])
+            json.dumps(output, allow_nan=False)
+        except ValueError:
             result["status"] = "invalid_output"
             result["error"] = {"type": "InvalidModelOutput"}
+        except Exception as error:
+            result["status"] = "evaluator_error"
+            result["error"] = {"type": type(error).__name__}
         else:
-            result["selected_offer_id"] = selected
-            result["score"] = int(selected == result["expected_offer_id"])
-            result["status"] = "correct" if result["score"] else "incorrect"
+            result["output"] = output
+            result["output_valid"] = True
+            try:
+                score = task.score_output(output, case["expected_output"])
+                if not isinstance(score, (int, float)) or score not in (0, 1):
+                    raise ValueError("Task scorer must return binary correctness")
+                result["score"] = int(score)
+                result["status"] = "correct" if score else "incorrect"
+            except Exception as error:
+                result["status"] = "evaluator_error"
+                result["error"] = {"type": type(error).__name__}
     result["latency_seconds"] = round(time.perf_counter() - started, 6)
     return result
 
@@ -239,13 +113,13 @@ def summarize(results: list[dict], selected_count: int) -> dict:
         "selected_count": selected_count, "attempted_count": len(results),
         "unattempted_count": selected_count - len(results), "valid_scored_count": valid,
         "status_counts": dict(counts),
-        "selection_accuracy": counts["correct"] / valid if valid else None,
+        "accuracy": counts["correct"] / valid if valid else None,
         "success_rate_all_attempts": counts["correct"] / len(results) if results else None,
     }
 
 
 def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
-              metadata: dict, tracking=None, hosted_items=None) -> dict:
+              metadata: dict, task_definition: EvaluationTask, tracking=None, hosted_items=None) -> dict:
     """Execute sequentially, persist each result, and optionally track an experiment.
 
     Args:
@@ -254,6 +128,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
         sleep_seconds: Full pause between successive attempts.
         output_dir: Unique run directory for metadata, JSONL and summary.
         metadata: Safe experiment metadata, without credentials.
+        task_definition: Domain-specific parsing, scoring and metric settings.
         tracking: Optional initialized Langfuse client.
         hosted_items: Uploaded Langfuse items corresponding to the cases.
 
@@ -268,7 +143,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
     publication = "disabled" if tracking is None else "pending"
     run_error = None
     experiment_url = None
-    progress = tqdm(total=len(cases), desc="Evaluating offers", unit="case", dynamic_ncols=True)
+    progress = tqdm(total=len(cases), desc="Evaluating cases", unit="case", dynamic_ncols=True)
 
     def task(*, item, **kwargs):
         """Execute one SDK or local item with pacing and durable output.
@@ -284,12 +159,12 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
         if results:
             time.sleep(sleep_seconds)
         observation = tracking.start_as_current_observation(
-            name="oci-offer-selection", as_type="generation", model=metadata["model"],
+            name=f"oci-{task_definition.name}", as_type="generation", model=metadata["model"],
             input={"instructions": metadata["instructions"], "input": case["input"]},
             model_parameters={"max_output_tokens": metadata["max_output_tokens"]},
         ) if tracking else nullcontext()
         with observation as generation:
-            result = evaluate_case(case, invoke)
+            result = evaluate_case(case, invoke, task_definition)
             # Save locally before any trace update that could fail.
             with (output_dir / "results.jsonl").open("a") as stream:
                 stream.write(json.dumps(result, ensure_ascii=False) + "\n")
@@ -303,18 +178,18 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             if generation:
                 generation.update(
                     output=result["raw_output"], usage_details=result["usage"],
-                    level="ERROR" if result["status"] in {"api_error", "invalid_output"} else "DEFAULT",
+                    level="ERROR" if result["status"] in {"api_error", "invalid_output", "evaluator_error"} else "DEFAULT",
                     status_message=result["status"],
                 )
         return result
 
     try:
         if tracking:
-            from agent_evals.langfuse_tracking import selection_evaluator
+            from agent_evals.langfuse_tracking import make_evaluator
 
             experiment = tracking.run_experiment(
                 name=metadata["experiment_name"], run_name=metadata["run_name"],
-                data=hosted_items, task=task, evaluators=[selection_evaluator],
+                data=hosted_items, task=task, evaluators=[make_evaluator(task_definition.metric_name)],
                 max_concurrency=1,
                 metadata={k: str(v) for k, v in metadata.items() if k != "instructions"},
             )
@@ -322,7 +197,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             if len(experiment.item_results) != len(cases) or any(
                 not {"valid_output", "execution_status"}.issubset({e.name for e in item.evaluations})
                 or (isinstance(item.output, dict) and item.output.get("score") is not None
-                    and "selection_correct" not in {e.name for e in item.evaluations})
+                    and task_definition.metric_name not in {e.name for e in item.evaluations})
                 for item in experiment.item_results
             ):
                 run_error = "LangfuseExperimentItemError"
@@ -349,25 +224,29 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
         summary = summarize(results, len(cases)) | {
             "run_id": metadata["run_id"], "publication": publication,
             "run_error": run_error, "experiment_url": experiment_url,
+            "result_schema_version": 2, "task_name": task_definition.name,
+            "task_version": task_definition.version, "metric_name": task_definition.metric_name,
         }
         (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run validation or the configured OCI evaluation from the command line.
+    """Run validation or a task-selected OCI evaluation from the command line.
 
     Args:
         argv: Optional CLI arguments, defaulting to the process arguments.
 
     Returns:
         Exit code: 0 for completion, 1 for setup/publication failure, 2 for invalid
-        outputs or provider errors. Valid incorrect selections alone do not fail
+        outputs, evaluator failures or provider errors. Valid incorrect answers alone do not fail
         the command because no experiment acceptance threshold is defined yet.
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", type=Path, default=ROOT / "data/datasets/express-order-v1.json")
-    parser.add_argument("--rules", type=Path, default=ROOT / "rules/offer-selection.md")
+    parser.add_argument("--task", default="agent_evals.tasks.offer_selection",
+                        help="Trusted Python module exporting an EvaluationTask named TASK.")
+    parser.add_argument("--dataset", type=Path)
+    parser.add_argument("--rules", type=Path)
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--split", choices=["evaluation", "development", "all"], default="evaluation")
     parser.add_argument("--limit", type=int)
@@ -382,29 +261,39 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.experiment_name.strip():
         parser.error("--experiment-name must not be blank")
-    show_banner()
     try:
+        task_definition = load_task(args.task)
+        show_banner(task_definition.title)
+        dataset_path = args.dataset or ROOT / task_definition.default_dataset
+        rules_path = args.rules or ROOT / task_definition.default_rules
         with initialization_step(1, "Load dataset and verify structure and hashes"):
-            cases = load_cases(args.dataset, args.rules, args.split, args.limit)
+            cases = load_cases(dataset_path, rules_path, args.split, args.limit, task_definition)
         if args.dry_run:
-            print(f"Validated {len(cases)} cases with six offers; no external calls made.")
+            print(f"Validated {len(cases)} cases for {task_definition.title}; no external calls made.")
             return 0
         with initialization_step(2, "Load environment settings"):
             settings = load_settings(args.env_file, args.sleep_seconds)
         with initialization_step(3, "Read rules and prepare run metadata"):
-            rules = args.rules.read_text()
+            rules = rules_path.read_text()
+            manifest = json.loads(dataset_path.with_suffix(".manifest.json").read_text())
+            instructions = task_definition.build_instructions(rules)
             run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
             metadata = {
                 "run_id": run_id, "experiment_name": args.experiment_name,
                 "run_name": f"{args.experiment_name}-{run_id}",
-                "dataset_sha256": file_hash(args.dataset), "rules_sha256": file_hash(args.rules),
-                "prompt_sha256": hashlib.sha256(build_instructions(rules).encode()).hexdigest(),
-                "instructions": build_instructions(rules), "rules_version": "1.1", "dataset_version": "1.0",
+                "dataset_sha256": file_hash(dataset_path), "rules_sha256": file_hash(rules_path),
+                "prompt_sha256": hashlib.sha256(instructions.encode()).hexdigest(),
+                "instructions": instructions, "rules_version": manifest["rules_version"],
+                "dataset_version": manifest["dataset_version"], "result_schema_version": 2,
+                "task_name": task_definition.name, "task_module": args.task,
+                "task_version": task_definition.version, "metric_name": task_definition.metric_name,
                 "model": settings.model, "region": settings.region, "split": args.split,
                 "sleep_seconds": settings.sleep_seconds, "timeout_seconds": settings.timeout_seconds,
                 "max_output_tokens": settings.max_output_tokens, "automatic_retries": 0,
                 "sdk_versions": {n: version(n) for n in ("openai", "oci-genai-auth", "langfuse")},
-                "code_sha256": {p.name: file_hash(p) for p in Path(__file__).parent.glob("*.py")},
+                "code_sha256": {str(p.relative_to(Path(__file__).parent)): file_hash(p)
+                                for p in Path(__file__).parent.rglob("*.py")},
+                "task_source_sha256": task_source_hashes(task_definition),
             }
         # Build the signing client before publishing any dataset records.
         with initialization_step(4, "Initialize OCI IAM signing client"):
@@ -414,18 +303,23 @@ def main(argv: list[str] | None = None) -> int:
             if not args.no_langfuse:
                 from agent_evals.langfuse_tracking import prepare_experiment
 
-                tracking, items, name = prepare_experiment(cases, metadata["dataset_sha256"], args.split)
+                tracking, items, name = prepare_experiment(
+                    cases, metadata["dataset_sha256"], args.split, task_definition,
+                    manifest["dataset_version"], manifest["rules_version"],
+                )
                 metadata["dataset_name"] = name
             print(f"[{9 if tracking else 5}] Initialization complete; starting evaluation ... OK", flush=True)
             summary = run_cases(
-                cases, lambda task: invoke_model(client, settings, rules, task),
-                settings.sleep_seconds, args.output_dir / run_id, metadata, tracking, items,
+                cases, lambda task: invoke_model(client, settings, instructions, task),
+                settings.sleep_seconds, args.output_dir / run_id, metadata,
+                task_definition, tracking, items,
             )
         print(json.dumps(summary, indent=2))
         print(f"Local results: {args.output_dir / run_id}")
         if summary["run_error"] or summary["publication"] == "failed":
             return 1
-        return 2 if any(summary["status_counts"].get(s, 0) for s in ("api_error", "invalid_output")) else 0
+        return 2 if any(summary["status_counts"].get(s, 0)
+                        for s in ("api_error", "invalid_output", "evaluator_error")) else 0
     except ConfigurationError as error:
         print(f"Evaluation setup failed: {error}")
         return 1

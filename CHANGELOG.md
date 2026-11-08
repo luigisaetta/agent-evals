@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* 2026-11-08: Separate reusable OCI/Langfuse execution from task adapters; add --task module selection, isolate Express Order validation/prompt/parsing/scoring, and verify reuse with a classification fixture. Introduce generic result schema v2 and document how to add another use case.
+* 2026-11-08: Extract reusable API error classification into agent_evals.errors, keeping evaluation results and diagnostic messages unchanged.
 * 2026-11-08: Display an Agent Evals project banner before initialization logs, including the Automotive Express Order use case and OCI Responses/Langfuse stack.
 * 2026-11-08: Remove oracle winner recomputation from evaluation startup and add numbered English initialization logs with completion/failure status and elapsed timings, including Langfuse authentication and case upload.
 * 2026-11-08: Surface safe root-cause categories for OCI connection failures in evaluation results and progress messages, including DNS resolution failures hidden by APIConnectionError.

@@ -9,14 +9,18 @@ from contextlib import contextmanager
 import time
 
 
-def show_banner() -> None:
-    """Print the project identity before initialization logs."""
-    width = 62
+def show_banner(task_title: str) -> None:
+    """Print the project and selected task before initialization logs.
+
+    Args:
+        task_title: Display title supplied by the selected task adapter.
+    """
     lines = (
         "AGENT EVALS",
-        "Automotive Express Order",
+        task_title,
         "OCI Generative AI | Responses API | Langfuse",
     )
+    width = max(62, max(len(line) for line in lines) + 4)
     banner = ["", "╭" + "─" * width + "╮", "│" + " " * width + "│"]
     banner.extend("│" + line.center(width) + "│" for line in lines)
     banner.extend(["│" + " " * width + "│", "╰" + "─" * width + "╯", ""])

@@ -48,6 +48,14 @@ flowchart LR
 
 Only the rules and case input go to the model. Expected answers and scenario metadata stay with the evaluation runner.
 
+## Reuse the pipeline for another task
+
+OCI access, pacing, progress, results, diagnostics, and Langfuse tracking are shared. Express Order-specific validation, prompt construction, response parsing, and scoring live in [one task adapter](src/agent_evals/tasks/offer_selection.py).
+
+To adapt the pipeline, supply a task module exporting `TASK`, a rules file, and a dataset with its manifest. Select the module with `--task`; existing commands default to Express Order. A separate classification fixture verifies the same pipeline with plain text inputs, label outputs, and a different score name.
+
+See [Adapting the runner to another task](docs/adapting-tasks.md) for the four callbacks, examples, and the version 2 result format. The reusable contract currently supports binary correctness scoring.
+
 ## Dataset and scoring
 
 The [synthetic dataset](data/datasets/express-order-v1.json) contains **100 cases with six offers each**, generated from the local catalogs using a fixed seed. Every part is requested once; each plant city appears in ten requests. Supplier names and costs are illustrative, and the locations represent hypothetical plants.
@@ -134,17 +142,18 @@ The root-level `run_experiment.sh` requires the experiment name as its first arg
 
 The runner defaults to the 80 evaluation cases. Use `--split all` to explicitly include all 100 cases, or `--no-langfuse` for OCI evaluation with local results only. Set `EVAL_SLEEP_SECONDS` in `.env` to change the default two-second pause; `--sleep-seconds` overrides it.
 
-Results are saved under `data/runs/<run-id>/` as `metadata.json`, `results.jsonl`, and `summary.json`. The summary includes the Langfuse experiment URL when available. Publication is marked `submitted_unverified` until persistence is independently checked; ingestion is asynchronous.
+Results are saved under `data/runs/<run-id>/` as `metadata.json`, `results.jsonl`, and `summary.json`. Version 2 results store task answers in `output` and references in `expected_output`; summaries report `accuracy`, task identity, and metric name. The summary includes the Langfuse experiment URL when available. Publication is marked `submitted_unverified` until persistence is independently checked; ingestion is asynchronous.
 
 ## Validation status
 
-As of **2026-11-08**, **50 automated tests pass**. A one-case development smoke test successfully called OCI Responses using IAM signing, selected the expected offer, and published the dataset item, experiment, and scores to Langfuse. Persistence was verified through its read API.
+As of **2026-11-08**, **56 automated tests pass**, including cross-task execution with mocked OCI and Langfuse clients. Before the reusable-task refactor, a one-case development smoke test successfully called OCI Responses using IAM signing, selected the expected offer, and published the dataset item, experiment, and scores to Langfuse. Persistence was verified through its read API. The refactor has been verified offline; no new live run has been performed for it.
 
 This confirms the integration on one development case. A full-dataset accuracy result has not yet been measured.
 
 ## Explore the project
 
 * [Evaluation setup, outputs, and operational details](docs/evaluation.md)
+* [Adding another use case with a task adapter](docs/adapting-tasks.md)
 * [Dataset coverage, format, and regeneration](data/datasets/README.md)
 * [Supplier, part, and plant-location catalogs](data/catalogs/README.md)
 * [Task specification and JSON example](specs/offer-selection.md)

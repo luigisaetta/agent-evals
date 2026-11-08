@@ -6,7 +6,6 @@ Description: Verify offline OCI evaluation, pacing and Langfuse publication mapp
 """
 
 from contextlib import contextmanager
-from copy import deepcopy
 import hashlib
 import json
 import socket
@@ -18,7 +17,9 @@ import httpx
 import pytest
 
 from agent_evals.config import ConfigurationError, ROOT, Settings, load_settings
-from agent_evals.evaluate import evaluate_case, load_cases, main, parse_selection, run_cases, summarize
+from agent_evals.dataset import load_cases
+from agent_evals.evaluate import evaluate_case, main, run_cases, summarize
+from agent_evals.tasks.offer_selection import TASK, parse_output
 from agent_evals import langfuse_tracking, oci_model
 
 DATASET = ROOT / "data/datasets/express-order-v1.json"
@@ -28,7 +29,7 @@ RULES = ROOT / "rules/offer-selection.md"
 @pytest.fixture
 def cases():
     """Return three validated development cases for network-free checks."""
-    return load_cases(DATASET, RULES, "development", 3)
+    return load_cases(DATASET, RULES, "development", 3, TASK)
 
 
 @pytest.fixture
@@ -67,6 +68,7 @@ def test_model_request_contains_only_task_input_and_rules(cases, settings):
     assert args["model"] == "test-model" and args["store"] is False
     assert json.loads(args["input"]) == cases[0]["input"]
     assert "RULE TEXT" in args["instructions"]
+    assert args["instructions"] == "RULE TEXT"
     assert "expected_offer_id" not in args["input"] and "scenario" not in args["input"]
     assert result["usage"] == {"input": 100, "output": 20, "total": 120}
 
@@ -100,7 +102,7 @@ def test_auth_helper_cannot_retry_a_401(monkeypatch):
 def test_invalid_selection_responses(text, cases):
     """Reject malformed JSON, extra/duplicate fields and unknown identifiers."""
     with pytest.raises(ValueError):
-        parse_selection(text, cases[0]["input"])
+        parse_output(text, cases[0]["input"])
 
 
 def test_scoring_distinguishes_incorrect_invalid_and_provider_failure(cases):
@@ -108,14 +110,14 @@ def test_scoring_distinguishes_incorrect_invalid_and_provider_failure(cases):
     case = cases[0]
     expected = case["expected_output"]["expected_offer_id"]
     wrong = next(o["offer_id"] for o in case["input"]["offers"] if o["offer_id"] != expected)
-    assert evaluate_case(case, lambda task: _response(expected))["score"] == 1
-    incorrect = evaluate_case(case, lambda task: _response(wrong))
+    assert evaluate_case(case, lambda task: _response(expected), TASK)["score"] == 1
+    incorrect = evaluate_case(case, lambda task: _response(wrong), TASK)
     assert incorrect["status"] == "incorrect" and incorrect["score"] == 0
     for response in [_response("unknown"), _response(expected, "incomplete")]:
-        invalid = evaluate_case(case, lambda task: response)
+        invalid = evaluate_case(case, lambda task: response, TASK)
         assert invalid["status"] == "invalid_output" and invalid["score"] is None
     invoke = Mock(side_effect=RuntimeError("FAKE_SECRET_MUST_NOT_LEAK"))
-    failed = evaluate_case(case, invoke)
+    failed = evaluate_case(case, invoke, TASK)
     assert failed["status"] == "api_error" and failed["score"] is None
     assert "FAKE_SECRET" not in json.dumps(failed)
 
@@ -129,7 +131,7 @@ def test_nested_dns_failure_is_reported_without_raw_error_text(cases):
     transport_error.__cause__ = dns_error
     api_error = APIConnectionError(request=httpx.Request("POST", "https://example.com"))
     api_error.__cause__ = transport_error
-    result = evaluate_case(cases[0], Mock(side_effect=api_error))
+    result = evaluate_case(cases[0], Mock(side_effect=api_error), TASK)
     assert result["error"]["reason"] == "DNS resolution failed"
     assert result["error"]["cause_type"] == "gaierror"
     assert "FAKE_SECRET" not in json.dumps(result)
@@ -151,10 +153,10 @@ def test_sequential_pause_after_success_and_failure_and_persistence(monkeypatch,
         return response
 
     output = tmp_path / "run"
-    summary = run_cases(cases, invoke, 3.5, output, {"run_id": "test"})
+    summary = run_cases(cases, invoke, 3.5, output, {"run_id": "test"}, TASK)
     assert [e[0] for e in events] == ["call", "sleep", "call", "sleep", "call"]
     assert [e[1] for e in events if e[0] == "sleep"] == [3.5, 3.5]
-    assert summary["selection_accuracy"] == 1 and summary["success_rate_all_attempts"] == 1 / 3
+    assert summary["accuracy"] == 1 and summary["success_rate_all_attempts"] == 1 / 3
     assert summary["valid_scored_count"] == 1 and summary["attempted_count"] == 3
     stored = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
     assert [r["status"] for r in stored] == ["correct", "api_error", "invalid_output"]
@@ -164,7 +166,7 @@ def test_sequential_pause_after_success_and_failure_and_persistence(monkeypatch,
 def test_all_failures_have_no_valid_accuracy():
     """Report null accuracy when no model output can be scored."""
     summary = summarize([{"status": "api_error"}, {"status": "invalid_output"}], 3)
-    assert summary["selection_accuracy"] is None
+    assert summary["accuracy"] is None
     assert summary["success_rate_all_attempts"] == 0 and summary["unattempted_count"] == 1
 
 
@@ -183,16 +185,16 @@ def test_run_name_alias_remains_supported():
 
 def test_case_selection_dry_run_and_provenance(tmp_path, capsys):
     """Check split counts, offline execution and mismatched rule rejection."""
-    assert len(load_cases(DATASET, RULES, "evaluation", None)) == 80
-    assert len(load_cases(DATASET, RULES, "all", None)) == 100
+    assert len(load_cases(DATASET, RULES, "evaluation", None, TASK)) == 80
+    assert len(load_cases(DATASET, RULES, "all", None, TASK)) == 100
     assert main(["--experiment-name", "validation", "--dry-run", "--split", "all"]) == 0
     assert "100 cases" in capsys.readouterr().out
     with pytest.raises(ValueError, match="positive"):
-        load_cases(DATASET, RULES, "evaluation", 0)
+        load_cases(DATASET, RULES, "evaluation", 0, TASK)
     rules = tmp_path / "rules.md"
     rules.write_text("different rules")
     with pytest.raises(ValueError, match="Rule contents"):
-        load_cases(DATASET, rules, "all", None)
+        load_cases(DATASET, rules, "all", None, TASK)
 
 
 def test_startup_uses_stored_reference_without_recomputing_winner(tmp_path):
@@ -207,7 +209,7 @@ def test_startup_uses_stored_reference_without_recomputing_winner(tmp_path):
     manifest = json.loads(DATASET.with_suffix(".manifest.json").read_text())
     manifest["dataset_sha256"] = hashlib.sha256(dataset.read_bytes()).hexdigest()
     dataset.with_suffix(".manifest.json").write_text(json.dumps(manifest))
-    loaded = load_cases(dataset, RULES, "all", None)
+    loaded = load_cases(dataset, RULES, "all", None, TASK)
     assert loaded[0]["expected_output"]["expected_offer_id"] == alternative
 
 
@@ -249,7 +251,7 @@ def test_langfuse_upload_ids_and_evaluations(monkeypatch, cases, capsys):
     client = Mock()
     client.auth_check.return_value = True
     monkeypatch.setattr(langfuse_tracking, "Langfuse", Mock(return_value=client))
-    langfuse_tracking.prepare_experiment(cases, "a" * 64, "development")
+    langfuse_tracking.prepare_experiment(cases, "a" * 64, "development", TASK, "1.0", "1.1")
     log = capsys.readouterr().out
     for activity in ["[5] Initialize Langfuse client", "[6] Verify Langfuse authentication",
                      "[7] Create or update Langfuse dataset", "[8] Upload 3 selected cases to Langfuse"]:
@@ -259,13 +261,14 @@ def test_langfuse_upload_ids_and_evaluations(monkeypatch, cases, capsys):
     assert client.create_dataset_item.call_args_list[0].kwargs["input"] == cases[0]["input"]
     assert client.create_dataset_item.call_args_list[0].kwargs["expected_output"] == cases[0]["expected_output"]
     client.create_dataset_item.reset_mock()
-    langfuse_tracking.prepare_experiment(cases, "a" * 64, "development")
+    langfuse_tracking.prepare_experiment(cases, "a" * 64, "development", TASK, "1.0", "1.1")
     assert first_ids == [c.kwargs["id"] for c in client.create_dataset_item.call_args_list]
     expected = cases[0]["expected_output"]
-    output = {"status": "correct", "selected_offer_id": expected["expected_offer_id"]}
-    assert {e.name: e.value for e in langfuse_tracking.selection_evaluator(output=output, expected_output=expected)}["selection_correct"] == 1
+    output = {"status": "correct", "output_valid": True, "score": 1}
+    assert {e.name: e.value for e in langfuse_tracking.make_evaluator(TASK.metric_name)(output=output, expected_output=expected)}["selection_correct"] == 1
     output["status"] = "invalid_output"
-    assert "selection_correct" not in {e.name for e in langfuse_tracking.selection_evaluator(output=output, expected_output=expected)}
+    output["output_valid"] = False
+    assert "selection_correct" not in {e.name for e in langfuse_tracking.make_evaluator(TASK.metric_name)(output=output, expected_output=expected)}
 
 
 def test_langfuse_experiment_is_sequential_and_flush_failure_is_reported(monkeypatch, tmp_path, cases):
@@ -294,7 +297,7 @@ def test_langfuse_experiment_is_sequential_and_flush_failure_is_reported(monkeyp
                 "model": "test-model", "instructions": "rules",
                 "max_output_tokens": 2048, "dataset_name": "test-dataset"}
     summary = run_cases([case], lambda task: _response(case["expected_output"]["expected_offer_id"]),
-                        0, tmp_path / "run", metadata, client, [object()])
+                        0, tmp_path / "run", metadata, TASK, client, [object()])
     assert summary["publication"] == "failed" and summary["run_error"] == "LangfuseFlushError"
     assert summary["attempted_count"] == 1 and (tmp_path / "run/results.jsonl").exists()
     assert "private error" not in json.dumps(summary)

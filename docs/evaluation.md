@@ -1,6 +1,6 @@
 # Running the offer-selection evaluation
 
-The runner invokes the selected model on OCI Generative AI through the Responses API. It authenticates using the private key referenced by your OCI config file and records results locally and, by default, in Langfuse Cloud. Expected answers are read from the dataset; the deterministic oracle is used during dataset generation and automated tests, without recomputing winners at evaluation startup.
+The runner invokes the selected model on OCI Generative AI through the Responses API. It authenticates using the private key referenced by your OCI config file and records results locally and, by default, in Langfuse Cloud. Expected answers are read from the dataset; the deterministic oracle is used during dataset generation and automated tests, without recomputing winners at evaluation startup. Express Order is the default task adapter. Use `--task` with another trusted module to reuse the same runner; see [the adaptation guide](adapting-tasks.md).
 
 ## Setup
 
@@ -88,21 +88,23 @@ A `tqdm` progress bar shows completed attempts out of the selected case count fo
 
 Each run has a unique directory under ignored `data/runs/`:
 
-* `metadata.json`: run identifier/name, model, region, split, limits, prompt/rules/dataset/code hashes, instructions, and SDK versions. The required experiment name is recorded separately, and a unique suffix is appended to run names to avoid merging repeated experiments.
-* `results.jsonl`: one record per attempted case, written immediately. Includes expected and selected IDs, raw output, token usage when returned, latency, execution status, and score or safe error classification.
-* `summary.json`: attempt counts, unattempted count, valid-score denominator, status counts, metrics, run errors, publication state, and experiment URL when available.
+* `metadata.json`: run identifier/name, task module/name/version, metric name, result schema version, model, region, split, limits, prompt/rules/dataset/code hashes, task callback source hashes, instructions, and SDK versions. The required experiment name is recorded separately, and a unique suffix is appended to run names to avoid merging repeated experiments.
+* `results.jsonl`: one record per attempted case, written immediately. Includes generic `expected_output`, parsed `output`, `output_valid`, raw output, token usage when returned, latency, execution status, and score or safe error classification.
+* `summary.json`: result schema version, task identity, metric name, attempt counts, unattempted count, valid-score denominator, status counts, `accuracy`, overall success rate, run errors, publication state, and experiment URL when available.
+
+New runs use result schema version 2. For Express Order, the chosen ID is now `output.selected_offer_id`, and the reference is `expected_output.expected_offer_id`. `accuracy` replaces `selection_accuracy` in summaries. Older run files remain unchanged; see [the migration table](adapting-tasks.md#result-schema-version-2).
 
 `correct` and `incorrect` are valid selections scored 1 and 0 respectively. `invalid_output` includes malformed JSON, extra or duplicate output fields, unknown offer IDs, and incomplete responses. `api_error` indicates invocation failure, recording safe exception classes, HTTP status, and a root-cause category without raw SDK exception text. Connection failures show categories such as `DNS resolution failed` or `Request timed out` alongside the progress bar. Invalid outputs and API errors have no selection score and cannot count as successes.
 
-Selection accuracy is correct selections divided by valid scored cases. Overall success rate is correct selections divided by all attempted cases. Always inspect failure and unattempted counts alongside these rates. Accuracy is null if there are no valid outputs. No experiment-level pass threshold is currently defined.
+Accuracy is correct answers divided by valid scored cases. Overall success rate is correct answers divided by all attempted cases. Always inspect failure and unattempted counts alongside these rates. Accuracy is null if there are no valid scored outputs. Unexpected task parser/scorer errors use `evaluator_error`, have no correctness score, and are counted separately from model and API failures. No experiment-level pass threshold is currently defined.
 
-Exit codes: 0 means the run completed (including valid but incorrect selections); 1 means setup, incomplete experiment, or publication failure; 2 means at least one invalid output or API error occurred. A dry run produces no model accuracy or experiment records.
+Exit codes: 0 means the run completed (including valid but incorrect answers); 1 means setup, incomplete experiment, or publication failure; 2 means at least one invalid output, evaluator error, or API error occurred. A dry run produces no model accuracy or experiment records.
 
 ## Langfuse behavior
 
 The runner authenticates to Langfuse and uploads only the selected synthetic cases before inference. Dataset names are scoped by source dataset hash and split, and item IDs are deterministic, allowing safe repeated uploads. With a case limit, only that subset is uploaded; subsequent larger runs can add the remaining cases. Expected answers and scenario metadata stay outside the OCI model prompt.
 
-The SDK experiment runs with `max_concurrency=1`, creates generation traces, and attaches `valid_output`, `execution_status`, and (for valid outputs) `selection_correct` scores. This uses the documented [Langfuse SDK experiment workflow](https://langfuse.com/docs/evaluation/experiments/experiments-via-sdk).
+The SDK experiment runs with `max_concurrency=1`, creates generation traces, and attaches `valid_output`, `execution_status`, and the task's correctness metric for scored outputs. Express Order keeps the `selection_correct` metric and existing dataset namespace. Langfuse receives the score computed by the selected adapter, with no domain-specific scoring code in the tracking module. This uses the documented [Langfuse SDK experiment workflow](https://langfuse.com/docs/evaluation/experiments/experiments-via-sdk).
 
 Local result files remain available when tracing/publication fails after execution begins. `submitted_unverified` means SDK execution and flush completed; asynchronous ingestion has not been independently confirmed. Inspect the experiment URL in Langfuse to verify persistence. A reported SDK/publication failure gives `failed`, never successful publication.
 
@@ -114,4 +116,4 @@ python -m pytest -q
 
 Unit tests use mocked clients and make no OCI or Langfuse calls. A live smoke run is a separate integration check; its result does not establish accuracy over the full dataset.
 
-On 2026-11-08, all 50 automated tests passed. After correcting the local environment configuration, a one-case development smoke test successfully invoked OCI Responses using IAM signing and selected the expected offer. The hosted dataset item, experiment, and scores (`valid_output=1`, `selection_correct=1`, `execution_status=correct`) were independently confirmed through the Langfuse read API after asynchronous ingestion. The earlier HTTP 404 was due to the previous configuration. This verifies the integration for one development case; the full dataset has not been executed.
+On 2026-11-08, all 56 automated tests passed, including the shared pipeline's use with an independent classification fixture and mocked Langfuse publication. Before the reusable-task refactor, a one-case development smoke test successfully invoked OCI Responses using IAM signing and selected the expected offer. Its dataset item, experiment, and scores (`valid_output=1`, `selection_correct=1`, `execution_status=correct`) were independently confirmed through the Langfuse read API. The refactor has been verified offline; no new live run or full-dataset accuracy measurement is claimed for it.
