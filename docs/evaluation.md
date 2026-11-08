@@ -1,6 +1,6 @@
 # Running the offer-selection evaluation
 
-The runner invokes the selected model on OCI Generative AI through the Responses API. It authenticates using the private key referenced by your OCI config file and records results locally and, by default, in Langfuse Cloud. The deterministic oracle is used only to validate dataset labels before the experiment.
+The runner invokes the selected model on OCI Generative AI through the Responses API. It authenticates using the private key referenced by your OCI config file and records results locally and, by default, in Langfuse Cloud. Expected answers are read from the dataset; the deterministic oracle is used during dataset generation and automated tests, without recomputing winners at evaluation startup.
 
 ## Setup
 
@@ -62,7 +62,23 @@ PYTHONPATH=src python -m agent_evals.evaluate \
   --split evaluation --sleep-seconds 5 --experiment-name baseline
 ```
 
-Use `--split all` to run all 100 cases, explicitly combining development and held-out data. Use `--no-langfuse` to retain local results without contacting Langfuse. `--dataset`, `--rules`, `--env-file`, and `--output-dir` override file locations. Dataset files must have their companion `.manifest.json`; the runner rejects changed dataset or rule hashes and inconsistent labels before calling any service.
+Use `--split all` to run all 100 cases, explicitly combining development and held-out data. Use `--no-langfuse` to retain local results without contacting Langfuse. `--dataset`, `--rules`, `--env-file`, and `--output-dir` override file locations. Dataset files must have their companion `.manifest.json`; the runner rejects changed dataset or rule hashes, malformed case structure, and reference IDs absent from the supplied offers before calling any service. It does not recalculate which offer should win.
+
+Initialization prints numbered English activities, appending `OK` and elapsed time on completion or `FAILED` if a step raises an error. Langfuse case upload is shown separately so its duration is visible before the first model invocation. For example (illustrative timings):
+
+```text
+[1] Load dataset and verify structure and hashes ... OK (0.01s)
+[2] Load environment settings ... OK (0.00s)
+[3] Read rules and prepare run metadata ... OK (0.01s)
+[4] Initialize OCI IAM signing client ... OK (0.10s)
+[5] Initialize Langfuse client ... OK (0.02s)
+[6] Verify Langfuse authentication ... OK (0.20s)
+[7] Create or update Langfuse dataset ... OK (0.20s)
+[8] Upload 80 selected cases to Langfuse ... OK (9.00s)
+[9] Initialization complete; starting evaluation ... OK
+```
+
+Dry runs finish after dataset validation; local-only runs omit the Langfuse steps.
 
 Calls are sequential, with no pause before the first call or after the last. The full configured pause occurs before every subsequent call, including after a failed request. Automatic provider retries are disabled; a 429 response is recorded as an API error and does not trigger hidden unpaced retries. A small signing adapter also suppresses the Oracle helper's built-in 401 resubmission, so authentication failures do not trigger an extra unpaced request. Increase the sleep setting when throttling occurs. No temperature or server-enforced JSON-schema parameter is assumed; output JSON is requested in the prompt and validated locally.
 
@@ -98,4 +114,4 @@ python -m pytest -q
 
 Unit tests use mocked clients and make no OCI or Langfuse calls. A live smoke run is a separate integration check; its result does not establish accuracy over the full dataset.
 
-On 2026-11-08, all 48 automated tests passed. After correcting the local environment configuration, a one-case development smoke test successfully invoked OCI Responses using IAM signing and selected the expected offer. The hosted dataset item, experiment, and scores (`valid_output=1`, `selection_correct=1`, `execution_status=correct`) were independently confirmed through the Langfuse read API after asynchronous ingestion. The earlier HTTP 404 was due to the previous configuration. This verifies the integration for one development case; the full dataset has not been executed.
+On 2026-11-08, all 50 automated tests passed. After correcting the local environment configuration, a one-case development smoke test successfully invoked OCI Responses using IAM signing and selected the expected offer. The hosted dataset item, experiment, and scores (`valid_output=1`, `selection_correct=1`, `execution_status=correct`) were independently confirmed through the Langfuse read API after asynchronous ingestion. The earlier HTTP 404 was due to the previous configuration. This verifies the integration for one development case; the full dataset has not been executed.

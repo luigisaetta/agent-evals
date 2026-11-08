@@ -138,7 +138,7 @@ Results are saved under `data/runs/<run-id>/` as `metadata.json`, `results.jsonl
 
 ## Validation status
 
-As of **2026-11-08**, **48 automated tests pass**. A one-case development smoke test successfully called OCI Responses using IAM signing, selected the expected offer, and published the dataset item, experiment, and scores to Langfuse. Persistence was verified through its read API.
+As of **2026-11-08**, **50 automated tests pass**. A one-case development smoke test successfully called OCI Responses using IAM signing, selected the expected offer, and published the dataset item, experiment, and scores to Langfuse. Persistence was verified through its read API.
 
 This confirms the integration on one development case. A full-dataset accuracy result has not yet been measured.
 

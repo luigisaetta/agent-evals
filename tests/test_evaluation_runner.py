@@ -7,6 +7,7 @@ Description: Verify offline OCI evaluation, pacing and Langfuse publication mapp
 
 from contextlib import contextmanager
 from copy import deepcopy
+import hashlib
 import json
 import socket
 from pathlib import Path
@@ -194,6 +195,34 @@ def test_case_selection_dry_run_and_provenance(tmp_path, capsys):
         load_cases(DATASET, rules, "all", None)
 
 
+def test_startup_uses_stored_reference_without_recomputing_winner(tmp_path):
+    """Trust stored labels after provenance and membership checks at startup."""
+    cases = json.loads(DATASET.read_text())
+    case = cases[0]
+    alternative = next(o["offer_id"] for o in case["input"]["offers"]
+                       if o["offer_id"] != case["expected_output"]["expected_offer_id"])
+    case["expected_output"]["expected_offer_id"] = alternative
+    dataset = tmp_path / "dataset.json"
+    dataset.write_text(json.dumps(cases))
+    manifest = json.loads(DATASET.with_suffix(".manifest.json").read_text())
+    manifest["dataset_sha256"] = hashlib.sha256(dataset.read_bytes()).hexdigest()
+    dataset.with_suffix(".manifest.json").write_text(json.dumps(manifest))
+    loaded = load_cases(dataset, RULES, "all", None)
+    assert loaded[0]["expected_output"]["expected_offer_id"] == alternative
+
+
+def test_initialization_log_reports_failure_without_exception_contents(capsys):
+    """Show the failed activity without leaking raw exception text."""
+    from agent_evals.console import initialization_step
+
+    with pytest.raises(RuntimeError):
+        with initialization_step(2, "Load environment settings"):
+            raise RuntimeError("FAKE_SECRET")
+    output = capsys.readouterr().out
+    assert "[2] Load environment settings ... FAILED" in output
+    assert "FAKE_SECRET" not in output
+
+
 def test_settings_load_dotenv_and_preserve_overrides(monkeypatch, tmp_path):
     """Load the actual variable names while keeping secrets out of settings."""
     for key in ["OCI_REGION", "OCI_MODEL", "OCI_PROJECT_ID", "EVAL_SLEEP_SECONDS",
@@ -213,7 +242,7 @@ def test_settings_load_dotenv_and_preserve_overrides(monkeypatch, tmp_path):
         load_settings(tmp_path / "absent.env")
 
 
-def test_langfuse_upload_ids_and_evaluations(monkeypatch, cases):
+def test_langfuse_upload_ids_and_evaluations(monkeypatch, cases, capsys):
     """Check deterministic uploads and separate scores for invalid outcomes."""
     for key in ("LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
         monkeypatch.setenv(key, "test-placeholder")
@@ -221,6 +250,10 @@ def test_langfuse_upload_ids_and_evaluations(monkeypatch, cases):
     client.auth_check.return_value = True
     monkeypatch.setattr(langfuse_tracking, "Langfuse", Mock(return_value=client))
     langfuse_tracking.prepare_experiment(cases, "a" * 64, "development")
+    log = capsys.readouterr().out
+    for activity in ["[5] Initialize Langfuse client", "[6] Verify Langfuse authentication",
+                     "[7] Create or update Langfuse dataset", "[8] Upload 3 selected cases to Langfuse"]:
+        assert f"{activity} ... OK (" in log
     first_ids = [c.kwargs["id"] for c in client.create_dataset_item.call_args_list]
     assert len(first_ids) == len(set(first_ids)) == 3
     assert client.create_dataset_item.call_args_list[0].kwargs["input"] == cases[0]["input"]

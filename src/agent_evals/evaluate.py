@@ -22,8 +22,8 @@ from tqdm import tqdm
 import httpx
 
 from agent_evals.config import ConfigurationError, ROOT, load_settings
+from agent_evals.console import initialization_step
 from agent_evals.oci_model import build_instructions, create_client, invoke_model
-from agent_evals.selection import select_best_offer
 
 
 def file_hash(path: Path) -> str:
@@ -75,12 +75,31 @@ def load_cases(dataset_path: Path, rules_path: Path, split: str, limit: int | No
         identifiers.add(case_id)
         if set(case["input"]) != {"request", "offers"} or len(case["input"]["offers"]) != 6:
             raise ValueError(f"Invalid six-offer task input: {case_id}")
+        request = case["input"]["request"]
+        if (not isinstance(request, dict)
+                or not {"part_id", "delivery_location", "latest_delivery_date"}.issubset(request)):
+            raise ValueError(f"Invalid request fields: {case_id}")
+        offers = case["input"]["offers"]
+        required_offer_fields = {"offer_id", "supplier_id", "part_id", "delivery_location",
+                                 "delivery_date", "total_cost_eur"}
+        if not isinstance(offers, list) or any(
+            not isinstance(offer, dict) or not required_offer_fields.issubset(offer)
+            for offer in offers
+        ):
+            raise ValueError(f"Invalid offer fields: {case_id}")
+        identifiers_in_case = [offer["offer_id"] for offer in offers]
+        if (any(not isinstance(identifier, str) or not identifier.strip() for identifier in identifiers_in_case)
+                or len(set(identifiers_in_case)) != len(identifiers_in_case)):
+            raise ValueError(f"Offer identifiers must be unique non-empty strings: {case_id}")
         if case["metadata"].get("split") not in {"development", "evaluation"}:
             raise ValueError(f"Missing or invalid split: {case_id}")
         if case["metadata"].get("rules_version") != manifest["rules_version"]:
             raise ValueError(f"Rules version mismatch: {case_id}")
-        if case["expected_output"] != {"expected_offer_id": select_best_offer(case["input"])}:
-            raise ValueError(f"Reference output disagrees with oracle: {case_id}")
+        expected = case["expected_output"]
+        if (not isinstance(expected, dict) or set(expected) != {"expected_offer_id"}
+                or not isinstance(expected["expected_offer_id"], str)
+                or expected["expected_offer_id"] not in {o["offer_id"] for o in case["input"]["offers"]}):
+            raise ValueError(f"Invalid reference offer identifier: {case_id}")
     selected = [c for c in cases if split == "all" or c["metadata"]["split"] == split]
     if not selected:
         raise ValueError("No cases selected")
@@ -364,33 +383,39 @@ def main(argv: list[str] | None = None) -> int:
     if not args.experiment_name.strip():
         parser.error("--experiment-name must not be blank")
     try:
-        cases = load_cases(args.dataset, args.rules, args.split, args.limit)
+        with initialization_step(1, "Load dataset and verify structure and hashes"):
+            cases = load_cases(args.dataset, args.rules, args.split, args.limit)
         if args.dry_run:
             print(f"Validated {len(cases)} cases with six offers; no external calls made.")
             return 0
-        settings = load_settings(args.env_file, args.sleep_seconds)
-        rules = args.rules.read_text()
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
-        metadata = {
-            "run_id": run_id, "experiment_name": args.experiment_name,
-            "run_name": f"{args.experiment_name}-{run_id}",
-            "dataset_sha256": file_hash(args.dataset), "rules_sha256": file_hash(args.rules),
-            "prompt_sha256": hashlib.sha256(build_instructions(rules).encode()).hexdigest(),
-            "instructions": build_instructions(rules), "rules_version": "1.1", "dataset_version": "1.0",
-            "model": settings.model, "region": settings.region, "split": args.split,
-            "sleep_seconds": settings.sleep_seconds, "timeout_seconds": settings.timeout_seconds,
-            "max_output_tokens": settings.max_output_tokens, "automatic_retries": 0,
-            "sdk_versions": {n: version(n) for n in ("openai", "oci-genai-auth", "langfuse")},
-            "code_sha256": {p.name: file_hash(p) for p in Path(__file__).parent.glob("*.py")},
-        }
+        with initialization_step(2, "Load environment settings"):
+            settings = load_settings(args.env_file, args.sleep_seconds)
+        with initialization_step(3, "Read rules and prepare run metadata"):
+            rules = args.rules.read_text()
+            run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
+            metadata = {
+                "run_id": run_id, "experiment_name": args.experiment_name,
+                "run_name": f"{args.experiment_name}-{run_id}",
+                "dataset_sha256": file_hash(args.dataset), "rules_sha256": file_hash(args.rules),
+                "prompt_sha256": hashlib.sha256(build_instructions(rules).encode()).hexdigest(),
+                "instructions": build_instructions(rules), "rules_version": "1.1", "dataset_version": "1.0",
+                "model": settings.model, "region": settings.region, "split": args.split,
+                "sleep_seconds": settings.sleep_seconds, "timeout_seconds": settings.timeout_seconds,
+                "max_output_tokens": settings.max_output_tokens, "automatic_retries": 0,
+                "sdk_versions": {n: version(n) for n in ("openai", "oci-genai-auth", "langfuse")},
+                "code_sha256": {p.name: file_hash(p) for p in Path(__file__).parent.glob("*.py")},
+            }
         # Build the signing client before publishing any dataset records.
-        with create_client(settings) as client:
+        with initialization_step(4, "Initialize OCI IAM signing client"):
+            client = create_client(settings)
+        with client:
             tracking, items = None, None
             if not args.no_langfuse:
                 from agent_evals.langfuse_tracking import prepare_experiment
 
                 tracking, items, name = prepare_experiment(cases, metadata["dataset_sha256"], args.split)
                 metadata["dataset_name"] = name
+            print(f"[{9 if tracking else 5}] Initialization complete; starting evaluation ... OK", flush=True)
             summary = run_cases(
                 cases, lambda task: invoke_model(client, settings, rules, task),
                 settings.sleep_seconds, args.output_dir / run_id, metadata, tracking, items,

@@ -10,6 +10,7 @@ import hashlib
 from langfuse import Evaluation, Langfuse
 
 from agent_evals.config import required_env
+from agent_evals.console import initialization_step
 
 
 def prepare_experiment(cases: list[dict], dataset_hash: str, split: str) -> tuple:
@@ -26,27 +27,31 @@ def prepare_experiment(cases: list[dict], dataset_hash: str, split: str) -> tupl
     Raises:
         ValueError: If credentials are missing or authentication fails.
     """
-    client = Langfuse(
-        public_key=required_env("LANGFUSE_PUBLIC_KEY"),
-        secret_key=required_env("LANGFUSE_SECRET_KEY"),
-        base_url=required_env("LANGFUSE_BASE_URL"),
-        timeout=30,
-    )
-    if not client.auth_check():
-        raise ValueError("Langfuse authentication failed")
+    with initialization_step(5, "Initialize Langfuse client"):
+        client = Langfuse(
+            public_key=required_env("LANGFUSE_PUBLIC_KEY"),
+            secret_key=required_env("LANGFUSE_SECRET_KEY"),
+            base_url=required_env("LANGFUSE_BASE_URL"),
+            timeout=30,
+        )
+    with initialization_step(6, "Verify Langfuse authentication"):
+        if not client.auth_check():
+            raise ValueError("Langfuse authentication failed")
     name = f"express-order-v1-{split}-{dataset_hash[:12]}"
-    client.create_dataset(
-        name=name, description="Synthetic Automotive Express Order selection cases",
-        metadata={"dataset_sha256": dataset_hash, "split": split, "rules_version": "1.1"},
-    )
+    with initialization_step(7, "Create or update Langfuse dataset"):
+        client.create_dataset(
+            name=name, description="Synthetic Automotive Express Order selection cases",
+            metadata={"dataset_sha256": dataset_hash, "split": split, "rules_version": "1.1"},
+        )
     items = []
-    for case in cases:
-        item_id = hashlib.sha256(f"{name}:{case['id']}".encode()).hexdigest()
-        items.append(client.create_dataset_item(
-            dataset_name=name, id=item_id, input=case["input"],
-            expected_output=case["expected_output"],
-            metadata=case["metadata"] | {"case_id": case["id"]},
-        ))
+    with initialization_step(8, f"Upload {len(cases)} selected cases to Langfuse"):
+        for case in cases:
+            item_id = hashlib.sha256(f"{name}:{case['id']}".encode()).hexdigest()
+            items.append(client.create_dataset_item(
+                dataset_name=name, id=item_id, input=case["input"],
+                expected_output=case["expected_output"],
+                metadata=case["metadata"] | {"case_id": case["id"]},
+            ))
     return client, items, name
 
 

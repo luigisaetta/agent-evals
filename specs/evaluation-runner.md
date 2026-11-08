@@ -2,7 +2,7 @@
 
 ## Scope
 
-Implement a readable, sequential Python runner for the existing Express Order dataset. Keep configuration, OCI model access, evaluation, and Langfuse publication in small modules. Use Google-style docstrings. The oracle validates dataset references before execution; it never replaces the model's selection.
+Implement a readable, sequential Python runner for the existing Express Order dataset. Keep configuration, OCI model access, evaluation, and Langfuse publication in small modules. Use Google-style docstrings. The oracle supplies reference labels during dataset generation and testing; evaluation startup does not recompute them.
 
 ## Configuration and authentication
 
@@ -18,7 +18,8 @@ Use `EVAL_SLEEP_SECONDS` (default 2) with a `--sleep-seconds` override. Require 
 * CLI supports dataset/rules paths, split (`evaluation` by default, `development`, or `all`), positive case limit, local output directory, and disabling Langfuse.
 * Provide an executable root-level `run_experiment.sh EXPERIMENT_NAME [OPTIONS...]` wrapper that runs Python in the `agent-evals` Conda environment from the repository root and forwards CLI options and exit status. Names containing spaces must be supported. Missing or blank names must fail before any service call.
 * Show a `tqdm` progress bar over the selected cases for both local and Langfuse runs. Advance after every persisted attempt, including failures, preserve per-case status messages without disrupting the bar, and close the bar when execution ends or fails.
-* A `--dry-run` validates references, rules provenance, and selection without network access or needing credentials. It never reports model accuracy.
+* A `--dry-run` validates dataset structure, reference ID membership, and dataset/rules hashes without network access or needing credentials. It never recomputes reference winners or reports model accuracy.
+* Print numbered English initialization activities immediately, followed by `OK` and elapsed seconds on completion or `FAILED` on errors. Cover dataset checks, configuration, rules/metadata preparation, OCI signing client creation, Langfuse client/authentication/dataset setup, and uploading the selected cases. Do not print credentials. Mark the transition to evaluation explicitly.
 * Each call receives only the natural-language rules, output instructions, and the case's `input`. Exclude expected output and scenario metadata.
 * Require a JSON object with exactly one non-empty `selected_offer_id` referring to a supplied offer. Malformed responses, incomplete generation, and unknown IDs are invalid outputs, distinct from valid but incorrect selections.
 * Record per-case expected/actual IDs, raw model text, status, optional score, usage, latency, and safe error classification. Distinguish invalid outputs from provider errors. Persist each case as JSONL immediately and write an aggregate summary; ignore generated run files in Git.
