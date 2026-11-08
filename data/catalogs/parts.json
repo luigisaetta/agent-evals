@@ -1,0 +1,502 @@
+[
+  {
+    "id": "PART-001",
+    "name": "Front ventilated brake disc",
+    "average_cost_eur": 48.5
+  },
+  {
+    "id": "PART-002",
+    "name": "Rear solid brake disc",
+    "average_cost_eur": 32.0
+  },
+  {
+    "id": "PART-003",
+    "name": "Front brake pad set",
+    "average_cost_eur": 29.5
+  },
+  {
+    "id": "PART-004",
+    "name": "Rear brake pad set",
+    "average_cost_eur": 24.0
+  },
+  {
+    "id": "PART-005",
+    "name": "Front left brake caliper",
+    "average_cost_eur": 85.0
+  },
+  {
+    "id": "PART-006",
+    "name": "Front right brake caliper",
+    "average_cost_eur": 85.0
+  },
+  {
+    "id": "PART-007",
+    "name": "Brake master cylinder",
+    "average_cost_eur": 72.0
+  },
+  {
+    "id": "PART-008",
+    "name": "ABS wheel speed sensor",
+    "average_cost_eur": 18.5
+  },
+  {
+    "id": "PART-009",
+    "name": "Brake vacuum booster",
+    "average_cost_eur": 95.0
+  },
+  {
+    "id": "PART-010",
+    "name": "Electronic parking brake actuator",
+    "average_cost_eur": 65.0
+  },
+  {
+    "id": "PART-011",
+    "name": "Front wheel hub assembly",
+    "average_cost_eur": 58.0
+  },
+  {
+    "id": "PART-012",
+    "name": "Rear wheel bearing",
+    "average_cost_eur": 26.5
+  },
+  {
+    "id": "PART-013",
+    "name": "Front lower control arm",
+    "average_cost_eur": 54.0
+  },
+  {
+    "id": "PART-014",
+    "name": "Front suspension ball joint",
+    "average_cost_eur": 14.5
+  },
+  {
+    "id": "PART-015",
+    "name": "Front stabilizer link",
+    "average_cost_eur": 9.8
+  },
+  {
+    "id": "PART-016",
+    "name": "Rear shock absorber",
+    "average_cost_eur": 38.0
+  },
+  {
+    "id": "PART-017",
+    "name": "Front suspension strut",
+    "average_cost_eur": 76.0
+  },
+  {
+    "id": "PART-018",
+    "name": "Front coil spring",
+    "average_cost_eur": 28.0
+  },
+  {
+    "id": "PART-019",
+    "name": "Rear coil spring",
+    "average_cost_eur": 24.5
+  },
+  {
+    "id": "PART-020",
+    "name": "Suspension strut top mount",
+    "average_cost_eur": 19.0
+  },
+  {
+    "id": "PART-021",
+    "name": "Electric power steering rack",
+    "average_cost_eur": 420.0
+  },
+  {
+    "id": "PART-022",
+    "name": "Outer tie rod end",
+    "average_cost_eur": 12.5
+  },
+  {
+    "id": "PART-023",
+    "name": "Inner tie rod",
+    "average_cost_eur": 16.0
+  },
+  {
+    "id": "PART-024",
+    "name": "Steering column assembly",
+    "average_cost_eur": 145.0
+  },
+  {
+    "id": "PART-025",
+    "name": "Steering angle sensor",
+    "average_cost_eur": 35.0
+  },
+  {
+    "id": "PART-026",
+    "name": "Left drive shaft assembly",
+    "average_cost_eur": 115.0
+  },
+  {
+    "id": "PART-027",
+    "name": "Right drive shaft assembly",
+    "average_cost_eur": 120.0
+  },
+  {
+    "id": "PART-028",
+    "name": "Outer constant velocity joint",
+    "average_cost_eur": 38.0
+  },
+  {
+    "id": "PART-029",
+    "name": "Drive shaft boot kit",
+    "average_cost_eur": 8.5
+  },
+  {
+    "id": "PART-030",
+    "name": "Transmission mounting bracket",
+    "average_cost_eur": 22.0
+  },
+  {
+    "id": "PART-031",
+    "name": "Clutch disc",
+    "average_cost_eur": 45.0
+  },
+  {
+    "id": "PART-032",
+    "name": "Clutch pressure plate",
+    "average_cost_eur": 62.0
+  },
+  {
+    "id": "PART-033",
+    "name": "Clutch release bearing",
+    "average_cost_eur": 24.0
+  },
+  {
+    "id": "PART-034",
+    "name": "Dual mass flywheel",
+    "average_cost_eur": 240.0
+  },
+  {
+    "id": "PART-035",
+    "name": "Gear selector cable",
+    "average_cost_eur": 31.0
+  },
+  {
+    "id": "PART-036",
+    "name": "Transmission oil cooler",
+    "average_cost_eur": 58.0
+  },
+  {
+    "id": "PART-037",
+    "name": "Automatic transmission solenoid",
+    "average_cost_eur": 42.0
+  },
+  {
+    "id": "PART-038",
+    "name": "Differential bearing",
+    "average_cost_eur": 19.5
+  },
+  {
+    "id": "PART-039",
+    "name": "Transmission input shaft seal",
+    "average_cost_eur": 4.8
+  },
+  {
+    "id": "PART-040",
+    "name": "Engine mounting assembly",
+    "average_cost_eur": 48.0
+  },
+  {
+    "id": "PART-041",
+    "name": "Engine oil filter",
+    "average_cost_eur": 4.5
+  },
+  {
+    "id": "PART-042",
+    "name": "Engine air filter",
+    "average_cost_eur": 7.5
+  },
+  {
+    "id": "PART-043",
+    "name": "Cabin pollen filter",
+    "average_cost_eur": 6.0
+  },
+  {
+    "id": "PART-044",
+    "name": "Fuel filter",
+    "average_cost_eur": 12.0
+  },
+  {
+    "id": "PART-045",
+    "name": "Engine oil pump",
+    "average_cost_eur": 68.0
+  },
+  {
+    "id": "PART-046",
+    "name": "Engine water pump",
+    "average_cost_eur": 42.0
+  },
+  {
+    "id": "PART-047",
+    "name": "Engine thermostat assembly",
+    "average_cost_eur": 19.0
+  },
+  {
+    "id": "PART-048",
+    "name": "Engine cooling radiator",
+    "average_cost_eur": 105.0
+  },
+  {
+    "id": "PART-049",
+    "name": "Radiator cooling fan assembly",
+    "average_cost_eur": 82.0
+  },
+  {
+    "id": "PART-050",
+    "name": "Coolant expansion tank",
+    "average_cost_eur": 14.0
+  },
+  {
+    "id": "PART-051",
+    "name": "Upper radiator hose",
+    "average_cost_eur": 9.5
+  },
+  {
+    "id": "PART-052",
+    "name": "Lower radiator hose",
+    "average_cost_eur": 11.0
+  },
+  {
+    "id": "PART-053",
+    "name": "Heater core",
+    "average_cost_eur": 38.0
+  },
+  {
+    "id": "PART-054",
+    "name": "Cabin blower motor",
+    "average_cost_eur": 46.0
+  },
+  {
+    "id": "PART-055",
+    "name": "Air conditioning compressor",
+    "average_cost_eur": 195.0
+  },
+  {
+    "id": "PART-056",
+    "name": "Air conditioning condenser",
+    "average_cost_eur": 74.0
+  },
+  {
+    "id": "PART-057",
+    "name": "Air conditioning expansion valve",
+    "average_cost_eur": 14.5
+  },
+  {
+    "id": "PART-058",
+    "name": "Cabin temperature sensor",
+    "average_cost_eur": 8.0
+  },
+  {
+    "id": "PART-059",
+    "name": "Coolant temperature sensor",
+    "average_cost_eur": 6.5
+  },
+  {
+    "id": "PART-060",
+    "name": "Engine oil pressure sensor",
+    "average_cost_eur": 7.2
+  },
+  {
+    "id": "PART-061",
+    "name": "Crankshaft position sensor",
+    "average_cost_eur": 14.0
+  },
+  {
+    "id": "PART-062",
+    "name": "Camshaft position sensor",
+    "average_cost_eur": 13.5
+  },
+  {
+    "id": "PART-063",
+    "name": "Mass air flow sensor",
+    "average_cost_eur": 36.0
+  },
+  {
+    "id": "PART-064",
+    "name": "Intake manifold pressure sensor",
+    "average_cost_eur": 18.0
+  },
+  {
+    "id": "PART-065",
+    "name": "Oxygen sensor",
+    "average_cost_eur": 29.0
+  },
+  {
+    "id": "PART-066",
+    "name": "Exhaust gas temperature sensor",
+    "average_cost_eur": 32.0
+  },
+  {
+    "id": "PART-067",
+    "name": "Electronic throttle body",
+    "average_cost_eur": 78.0
+  },
+  {
+    "id": "PART-068",
+    "name": "Fuel injector",
+    "average_cost_eur": 65.0
+  },
+  {
+    "id": "PART-069",
+    "name": "In-tank fuel pump module",
+    "average_cost_eur": 58.0
+  },
+  {
+    "id": "PART-070",
+    "name": "Ignition coil",
+    "average_cost_eur": 18.5
+  },
+  {
+    "id": "PART-071",
+    "name": "Spark plug",
+    "average_cost_eur": 4.0
+  },
+  {
+    "id": "PART-072",
+    "name": "Accessory drive belt",
+    "average_cost_eur": 8.5
+  },
+  {
+    "id": "PART-073",
+    "name": "Timing belt kit",
+    "average_cost_eur": 52.0
+  },
+  {
+    "id": "PART-074",
+    "name": "Timing chain tensioner",
+    "average_cost_eur": 24.0
+  },
+  {
+    "id": "PART-075",
+    "name": "Cylinder head gasket",
+    "average_cost_eur": 19.5
+  },
+  {
+    "id": "PART-076",
+    "name": "Valve cover gasket",
+    "average_cost_eur": 8.0
+  },
+  {
+    "id": "PART-077",
+    "name": "Intake manifold gasket",
+    "average_cost_eur": 5.5
+  },
+  {
+    "id": "PART-078",
+    "name": "Turbocharger assembly",
+    "average_cost_eur": 380.0
+  },
+  {
+    "id": "PART-079",
+    "name": "Charge air intercooler",
+    "average_cost_eur": 86.0
+  },
+  {
+    "id": "PART-080",
+    "name": "Exhaust gas recirculation valve",
+    "average_cost_eur": 64.0
+  },
+  {
+    "id": "PART-081",
+    "name": "Catalytic converter assembly",
+    "average_cost_eur": 225.0
+  },
+  {
+    "id": "PART-082",
+    "name": "Diesel particulate filter",
+    "average_cost_eur": 310.0
+  },
+  {
+    "id": "PART-083",
+    "name": "Exhaust rear silencer",
+    "average_cost_eur": 58.0
+  },
+  {
+    "id": "PART-084",
+    "name": "Exhaust flexible coupling",
+    "average_cost_eur": 12.0
+  },
+  {
+    "id": "PART-085",
+    "name": "Starter motor",
+    "average_cost_eur": 95.0
+  },
+  {
+    "id": "PART-086",
+    "name": "Alternator assembly",
+    "average_cost_eur": 125.0
+  },
+  {
+    "id": "PART-087",
+    "name": "12-volt auxiliary battery",
+    "average_cost_eur": 68.0
+  },
+  {
+    "id": "PART-088",
+    "name": "Battery current sensor",
+    "average_cost_eur": 18.0
+  },
+  {
+    "id": "PART-089",
+    "name": "Main engine wiring harness",
+    "average_cost_eur": 145.0
+  },
+  {
+    "id": "PART-090",
+    "name": "Sealed electrical connector",
+    "average_cost_eur": 1.8
+  },
+  {
+    "id": "PART-091",
+    "name": "LED headlamp assembly",
+    "average_cost_eur": 210.0
+  },
+  {
+    "id": "PART-092",
+    "name": "LED rear lamp assembly",
+    "average_cost_eur": 88.0
+  },
+  {
+    "id": "PART-093",
+    "name": "Front windshield wiper motor",
+    "average_cost_eur": 34.0
+  },
+  {
+    "id": "PART-094",
+    "name": "Windshield washer pump",
+    "average_cost_eur": 6.5
+  },
+  {
+    "id": "PART-095",
+    "name": "Door latch assembly",
+    "average_cost_eur": 28.0
+  },
+  {
+    "id": "PART-096",
+    "name": "Power window regulator",
+    "average_cost_eur": 42.0
+  },
+  {
+    "id": "PART-097",
+    "name": "Exterior mirror actuator",
+    "average_cost_eur": 16.0
+  },
+  {
+    "id": "PART-098",
+    "name": "Seat belt retractor assembly",
+    "average_cost_eur": 48.0
+  },
+  {
+    "id": "PART-099",
+    "name": "Parking distance sensor",
+    "average_cost_eur": 12.0
+  },
+  {
+    "id": "PART-100",
+    "name": "Tire pressure monitoring sensor",
+    "average_cost_eur": 14.5
+  }
+]

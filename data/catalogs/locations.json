@@ -1,0 +1,52 @@
+[
+  {
+    "id": "LOC-001",
+    "country": "Italy",
+    "name": "Rome"
+  },
+  {
+    "id": "LOC-002",
+    "country": "France",
+    "name": "Paris"
+  },
+  {
+    "id": "LOC-003",
+    "country": "Germany",
+    "name": "Berlin"
+  },
+  {
+    "id": "LOC-004",
+    "country": "Spain",
+    "name": "Madrid"
+  },
+  {
+    "id": "LOC-005",
+    "country": "Portugal",
+    "name": "Lisbon"
+  },
+  {
+    "id": "LOC-006",
+    "country": "Austria",
+    "name": "Vienna"
+  },
+  {
+    "id": "LOC-007",
+    "country": "Poland",
+    "name": "Warsaw"
+  },
+  {
+    "id": "LOC-008",
+    "country": "Czechia",
+    "name": "Prague"
+  },
+  {
+    "id": "LOC-009",
+    "country": "Hungary",
+    "name": "Budapest"
+  },
+  {
+    "id": "LOC-010",
+    "country": "Slovakia",
+    "name": "Bratislava"
+  }
+]
