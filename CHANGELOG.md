@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* 2026-11-08: Surface safe root-cause categories for OCI connection failures in evaluation results and progress messages, including DNS resolution failures hidden by APIConnectionError.
 * 2026-11-08: Require an explicit experiment name, use it in Langfuse with distinct per-execution run names, and add the executable root-level run_experiment.sh launcher for the agent-evals Conda environment.
 * 2026-11-08: Rewrite the main README for a public demo audience, covering objectives, Automotive Express Order context, evaluation scenarios and metrics, architecture, OCI/Langfuse tooling, quick start, and verified integration scope.
 * 2026-11-08: Add a tqdm progress bar to local and Langfuse evaluation runs, preserving per-case status messages and counting failed attempts.

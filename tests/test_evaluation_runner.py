@@ -8,6 +8,7 @@ Description: Verify offline OCI evaluation, pacing and Langfuse publication mapp
 from contextlib import contextmanager
 from copy import deepcopy
 import json
+import socket
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -116,6 +117,22 @@ def test_scoring_distinguishes_incorrect_invalid_and_provider_failure(cases):
     failed = evaluate_case(case, invoke)
     assert failed["status"] == "api_error" and failed["score"] is None
     assert "FAKE_SECRET" not in json.dumps(failed)
+
+
+def test_nested_dns_failure_is_reported_without_raw_error_text(cases):
+    """Identify the DNS root cause hidden by the provider's connection error."""
+    from openai import APIConnectionError
+
+    dns_error = socket.gaierror(-2, "FAKE_SECRET_MUST_NOT_LEAK")
+    transport_error = httpx.ConnectError("private host")
+    transport_error.__cause__ = dns_error
+    api_error = APIConnectionError(request=httpx.Request("POST", "https://example.com"))
+    api_error.__cause__ = transport_error
+    result = evaluate_case(cases[0], Mock(side_effect=api_error))
+    assert result["error"]["reason"] == "DNS resolution failed"
+    assert result["error"]["cause_type"] == "gaierror"
+    assert "FAKE_SECRET" not in json.dumps(result)
+    assert "private host" not in json.dumps(result)
 
 
 def test_sequential_pause_after_success_and_failure_and_persistence(monkeypatch, tmp_path, cases):

@@ -22,6 +22,7 @@ Use `EVAL_SLEEP_SECONDS` (default 2) with a `--sleep-seconds` override. Require 
 * Each call receives only the natural-language rules, output instructions, and the case's `input`. Exclude expected output and scenario metadata.
 * Require a JSON object with exactly one non-empty `selected_offer_id` referring to a supplied offer. Malformed responses, incomplete generation, and unknown IDs are invalid outputs, distinct from valid but incorrect selections.
 * Record per-case expected/actual IDs, raw model text, status, optional score, usage, latency, and safe error classification. Distinguish invalid outputs from provider errors. Persist each case as JSONL immediately and write an aggregate summary; ignore generated run files in Git.
+* For connection failures, inspect the exception cause chain and report safe DNS, TLS, timeout, proxy, or refused-connection categories in saved results and progress messages. Never expose raw exception text or request headers.
 * Compute selection accuracy over valid scored cases and success rate over all attempts. Report denominators and status counts; no valid results means null accuracy, not a perfect or zero accuracy claim.
 * Capture dataset/rules/prompt hashes, versions, SDK versions, model and region, split, sleep, timeout, token limit, and unique run identifier. Do not capture credentials or the full environment.
 

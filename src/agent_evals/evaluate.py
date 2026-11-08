@@ -13,10 +13,13 @@ import hashlib
 from importlib.metadata import version
 import json
 from pathlib import Path
+import socket
+import ssl
 import time
 from uuid import uuid4
 
 from tqdm import tqdm
+import httpx
 
 from agent_evals.config import ConfigurationError, ROOT, load_settings
 from agent_evals.oci_model import build_instructions, create_client, invoke_model
@@ -127,6 +130,42 @@ def parse_selection(raw_output: str, task_input: dict) -> str:
     return selected
 
 
+def describe_api_error(error: Exception) -> dict:
+    """Describe provider failures without exposing raw exception messages.
+
+    Args:
+        error: Provider exception, possibly wrapping a transport failure.
+
+    Returns:
+        Safe exception types, HTTP status and a readable failure category.
+    """
+    status_code = getattr(error, "status_code", None)
+    current = error
+    seen = set()
+    reason = None
+    cause_type = type(error).__name__
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        cause_type = type(current).__name__
+        for exception_type, category in (
+            (socket.gaierror, "DNS resolution failed"),
+            (ssl.SSLError, "TLS certificate or handshake failed"),
+            (httpx.TimeoutException, "Request timed out"),
+            (TimeoutError, "Request timed out"),
+            (httpx.ProxyError, "Proxy connection failed"),
+            (ConnectionRefusedError, "Connection refused"),
+        ):
+            if isinstance(current, exception_type):
+                reason = category
+        current = current.__cause__ or current.__context__
+    return {
+        "type": type(error).__name__,
+        "http_status": status_code if isinstance(status_code, int) else None,
+        "cause_type": cause_type,
+        "reason": reason or cause_type,
+    }
+
+
 def evaluate_case(case: dict, invoke) -> dict:
     """Invoke and score one case without exposing reference answers to the model.
 
@@ -147,12 +186,7 @@ def evaluate_case(case: dict, invoke) -> dict:
     try:
         response = invoke(case["input"])
     except Exception as error:
-        # Exception messages can contain credentials or HTTP request details.
-        status_code = getattr(error, "status_code", None)
-        result["error"] = {
-            "type": type(error).__name__,
-            "http_status": status_code if isinstance(status_code, int) else None,
-        }
+        result["error"] = describe_api_error(error)
     else:
         result.update(response)
         try:
@@ -244,6 +278,8 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             progress.update(1)
             http_status = (result["error"] or {}).get("http_status")
             detail = f" (HTTP {http_status})" if http_status else ""
+            if result["status"] == "api_error" and not http_status:
+                detail = f" ({result['error']['type']}: {result['error']['reason']})"
             tqdm.write(f"[{len(results)}/{len(cases)}] {case['id']}: {result['status']}{detail}")
             if generation:
                 generation.update(
