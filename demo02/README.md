@@ -203,6 +203,13 @@ each case to its result and these scores:
 | `selection_correct` | Exact final ID match, only for valid scored answers |
 | `valid_output` | Whether the complete pipeline produced a valid final answer |
 | `execution_status` | Correct, incorrect, or a classified execution failure |
+| `case_success` | 1 only for a correct final answer, 0 for every other attempt; filter on 0 to list all KO cases |
+| `extraction_correct` | 1 when the extracted request equals `expected_request` exactly; 0 for a different or invalid (including truncated) extraction; absent for v1 cases and API or internal failures |
+
+`extraction_correct` is independent of the final answer, so a wrong extraction
+followed by a correct selection is visible. Each local result also records the
+Langfuse `trace_id`, and the completion output prints
+`extraction_correct: N/M correct` with the failed case IDs.
 
 Each successful case has two child **GENERATION** observations:
 `demo02-extract_request` and `demo02-select_offer`. They include actual

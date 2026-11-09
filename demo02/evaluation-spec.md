@@ -60,6 +60,16 @@ Demo02 Python sources in addition to shared source hashes. Keep model access
 through OCI IAM Responses; use one configured model and one paced caller across
 all cases, with no additional runner sleep or automatic retries.
 
+## Extraction score
+
+Added 2026-11-09. `extraction_correct` compares the agent's `extracted_request` with `expected_output.expected_request` (dataset v2) by exact equality of the three fields:
+
+* 1: the extraction step completed with exactly the reference request.
+* 0: the extraction step completed with a different request, or ended as `invalid_output` (including a generation truncated by the output-token limit).
+* `None` (not published): the dataset has no `expected_request` (v1), the extraction step was not attempted, or it ended with an API or agent internal error.
+
+The score is independent of final correctness, so a wrong extraction followed by a correct selection remains visible.
+
 ## Publication and verification
 
 Use the shared deterministic dataset-item IDs and the dedicated `demo02-express-order` namespace.

@@ -58,7 +58,7 @@ Langfuse makes an experiment inspectable beyond its final aggregate score. In th
 | Correctness scores | Record whether each scored answer meets the task's expectation |
 | Validity and status scores | Separate valid output from model, API, and evaluator failures |
 
-The runner publishes a task-specific correctness metric alongside shared `valid_output` and `execution_status` scores. Local JSONL results and a summary preserve attempt counts and metric denominators, so failed or unattempted cases remain visible.
+The runner publishes a task-specific correctness metric alongside shared `valid_output`, `execution_status`, and `case_success` scores; `case_success` is 0 for every KO case, so its average is the success rate over all attempts. A task can add binary scores for intermediate steps, such as Demo02's `extraction_correct`. Local JSONL results and a summary preserve attempt counts and metric denominators, so failed or unattempted cases remain visible.
 
 Dataset item identifiers are stable across repeated uploads. Each execution has a unique run identifier and records task, model, dataset, rules, prompt, and code provenance. Calls are sequential, with a configurable pause between invocations.
 
@@ -167,7 +167,7 @@ Results are written to `data/runs/<run-id>/` as `metadata.json`, `results.jsonl`
 
 ## Evidence and current scope
 
-As of **2026-11-09**, **105 automated tests pass**, including cross-task execution, lossless Demo02 request conversion, the graded-difficulty Demo02 v2 dataset, the two-step LangGraph agent, compact evaluation progress and mocked Langfuse publication. A one-case live Demo02 development run verified OCI IAM inference, a correct selection, persisted Langfuse scores and model metadata, and two remotely confirmed generation traces. See the [Demo02 agent guide](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) for its execution and verification scope.
+As of **2026-11-09**, **114 automated tests pass**, including cross-task execution, lossless Demo02 request conversion, the graded-difficulty Demo02 v2 dataset, the two-step LangGraph agent, compact evaluation progress and mocked Langfuse publication. A one-case live Demo02 development run verified OCI IAM inference, a correct selection, persisted Langfuse scores and model metadata, and two remotely confirmed generation traces. See the [Demo02 agent guide](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) for its execution and verification scope.
 
 This repository is an exploration of the evaluation method, supported by a concrete implementation. It does not claim a full-agent performance benchmark. Extending the evidence to a complete agent would require evaluating its other responsibilities and interactions, using representative cases and agreed acceptance criteria.
 

@@ -56,7 +56,7 @@ TASK = EvaluationTask(
 )
 ```
 
-Paths are relative to the repository root unless absolute. The dataset namespace separates hosted data from other tasks; the metric name is used for correctness scores in Langfuse. Do not use the reserved metric names `valid_output` or `execution_status`.
+Paths are relative to the repository root unless absolute. The dataset namespace separates hosted data from other tasks; the metric name is used for correctness scores in Langfuse. Do not use the reserved metric names `valid_output`, `execution_status`, or `case_success`. An optional `extra_scores(case, result)` callback can return further binary metrics (0, 1, or `None` when not applicable); they are stored per result, summarized, and published to Langfuse without changing the case status.
 
 ## 2. Supply rules, cases and a manifest
 
@@ -139,7 +139,7 @@ Actual records also contain metadata, raw text, usage, latency and errors. A par
 
 Summaries and run metadata include `result_schema_version`, task identity/version, and metric name. Model/rule/dataset versions and hashes are recorded, along with task callback source hashes when source files are available. Older run artifacts remain unchanged and need the previous field paths when analyzed.
 
-Langfuse retains `selection_correct` for Express Order. Another task supplies its own correctness metric; all tasks share `valid_output` and `execution_status`. Hosted Express Order dataset names and stable item IDs retain their existing namespace.
+Langfuse retains `selection_correct` for Express Order. Another task supplies its own correctness metric; all tasks share `valid_output`, `execution_status`, and `case_success`. Hosted Express Order dataset names and stable item IDs retain their existing namespace.
 
 This initial reusable contract supports **binary correctness**, JSON datasets, and rules-based prompts on OCI Responses. Fractional scores, multiple domain metrics, alternative providers, and generalized dataset generation require explicit future extensions.
 

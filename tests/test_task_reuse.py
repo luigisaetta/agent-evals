@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-09
 License: MIT
 Description: Verify the shared evaluation pipeline with a non-procurement task.
 """
@@ -151,7 +151,9 @@ def test_scorer_failure_is_not_a_model_or_api_failure(priority_task, scorer):
     assert result["status"] == "evaluator_error" and result["score"] is None
     assert result["output_valid"] and "private error" not in json.dumps(result)
     scores = langfuse_tracking.make_evaluator(task.metric_name)(output=result)
-    assert {s.name: s.value for s in scores} == {"valid_output": 1, "execution_status": "evaluator_error"}
+    assert {s.name: s.value for s in scores} == {
+        "valid_output": 1, "execution_status": "evaluator_error", "case_success": 0,
+    }
 
 
 @pytest.mark.parametrize("with_langfuse", [False, True])
@@ -243,4 +245,57 @@ def test_invalid_task_module_is_rejected(monkeypatch):
     module = ModuleType("invalid_task_fixture")
     monkeypatch.setitem(sys.modules, module.__name__, module)
     with pytest.raises(ValueError, match="must export TASK"):
+        load_task(module.__name__)
+
+
+def _length_score(case: dict, result: dict) -> dict:
+    """Score an illustrative intermediate property; not applicable to invalid outputs."""
+    if not result["output_valid"]:
+        return {"short_input": None}
+    return {"short_input": int(len(case["input"]) < 15)}
+
+
+def test_extra_scores_are_stored_summarized_and_published(priority_task, tmp_path):
+    """Extra scores sit beside the status, are aggregated and skip non-applicable cases."""
+    task = replace(priority_task, extra_scores=_length_score)
+    cases = load_cases(task.default_dataset, task.default_rules, "all", None, task)
+    invoke = Mock(side_effect=[_response("urgent"), _response("urgent"), _response("unknown")])
+    summary = evaluate.run_cases(cases, invoke, 0, tmp_path / "run", {"run_id": "extra"}, task)
+    records = [json.loads(line) for line in (tmp_path / "run/results.jsonl").read_text().splitlines()]
+    assert [r["status"] for r in records] == ["correct", "incorrect", "invalid_output"]
+    assert [r["case_success"] for r in records] == [1, 0, 0]
+    assert [r["extra_scores"] for r in records] == [
+        {"short_input": 0}, {"short_input": 1}, {"short_input": None}]
+    assert summary["extra_score_summary"] == {
+        "short_input": {"scored_count": 2, "correct_count": 1, "accuracy": 0.5}}
+    published = [{s.name: s.value for s in langfuse_tracking.make_evaluator(task.metric_name)(output=r)}
+                 for r in records]
+    assert [p["case_success"] for p in published] == [1, 0, 0]
+    assert [p.get("short_input") for p in published] == [0, 1, None]
+    assert "short_input" not in published[2]
+
+
+@pytest.mark.parametrize("callback", [
+    Mock(side_effect=RuntimeError("private error")),
+    lambda case, result: {"short_input": 0.5},
+    lambda case, result: {"case_success": 1},
+    lambda case, result: {"priority_correct": 1},
+    lambda case, result: ["not", "a", "dict"],
+])
+def test_invalid_extra_scores_never_change_the_status(priority_task, callback):
+    """A failing or invalid extra-score callback is recorded but leaves the result intact."""
+    task = replace(priority_task, extra_scores=callback)
+    case = load_cases(task.default_dataset, task.default_rules, "all", 1, task)[0]
+    result = evaluate.evaluate_case(case, lambda data: _response("urgent"), task)
+    assert result["status"] == "correct" and result["score"] == 1 and result["case_success"] == 1
+    assert result["extra_scores"] == {} and "type" in result["extra_score_error"]
+    assert "private error" not in json.dumps(result)
+
+
+def test_shared_score_names_are_reserved(priority_task, monkeypatch):
+    """A task metric may not reuse a shared score name, including case_success."""
+    module = ModuleType("fixture_case_success_task")
+    module.TASK = replace(priority_task, metric_name="case_success")
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    with pytest.raises(ValueError, match="conflicts"):
         load_task(module.__name__)

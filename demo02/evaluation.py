@@ -46,6 +46,26 @@ def validate_case(case: dict) -> None:
         parse_request(json.dumps(expected["expected_request"]))
 
 
+def score_extraction(case: dict, result: dict) -> dict:
+    """Score the extraction step against the v2 reference request.
+
+    Args:
+        case: Dataset case; only v2 cases carry expected_output.expected_request.
+        result: Case result containing the agent's steps and extracted request.
+
+    Returns:
+        {"extraction_correct": 1} for an exact match, 0 for a different request or
+        invalid (including truncated) output, and None when the dataset has no
+        reference or the step was not attempted or failed for a non-model reason.
+    """
+    expected = case["expected_output"].get("expected_request")
+    steps = result.get("steps") or []
+    if (expected is None or not steps or steps[0].get("stage") != "extract_request"
+            or steps[0].get("status") not in {"completed", "invalid_output"}):
+        return {"extraction_correct": None}
+    return {"extraction_correct": int(result.get("extracted_request") == expected)}
+
+
 def create_invoker(*, client, settings: Settings, rules: str, tracking=None):
     """Prepare one graph and paced transport for an entire sequential experiment.
 
@@ -155,6 +175,7 @@ TASK = EvaluationTask(
     parse_output=parse_output,
     score_output=score_output,
     create_invoker=create_invoker,
+    extra_scores=score_extraction,
     source_files=tuple(sorted(p.relative_to(ROOT) for p in (ROOT / "demo02").glob("*.py")))
     + (Path("demo02/prompts/extract_request.md"),),
 )

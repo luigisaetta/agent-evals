@@ -26,6 +26,19 @@ The Express Order adapter is `agent_evals.tasks.offer_selection` and exports `TA
 * Banner title, progress text and dry-run output must work for another domain. Record hashes for task callbacks as well as shared code so custom modules are reproducible.
 * Initial reuse targets binary-correctness tasks with local JSON datasets and natural-language rule files. Multi-metric/fractional scoring, alternative providers, and generalized synthetic generation are outside this refactor.
 
+## Case success, additional scores and trace IDs
+
+Added 2026-11-09. The correctness metric is published only for valid outputs, so its Langfuse average excludes invalid outputs and API or agent failures. A reviewer could not find every KO case from a single score, and errors in intermediate steps (for example a wrong extraction followed by a correct final choice) were not published at all.
+
+* Every attempted case receives `case_success`: 1 when the status is `correct`, 0 for every other status, including `api_error`. Its average equals `success_rate_all_attempts`, and filtering `case_success = 0` lists exactly the KO cases.
+* A task may supply an optional `extra_scores(case, result)` callback returning a dictionary of binary metrics. A value of `None` means not applicable (for example, the step was not reached because of an API error). Names must not collide with `valid_output`, `execution_status`, `case_success` or the task metric; values must be 0, 1 or `None`. Extra scores never change the case status. If the callback fails or returns an invalid value, the result records `extra_score_error` with the exception type and publishes no extra scores for that case.
+* Each result stores `case_success`, `extra_scores` and, when tracking is enabled, the Langfuse `trace_id` (from `Langfuse.get_current_trace_id()` inside the experiment task, verified on SDK 5.2.0 on 2026-11-09). Trace IDs allow later scores to be attached to existing traces without rerunning.
+* The summary adds `extra_score_summary`: for each extra metric, the number of scored cases, the number of 1 values and their ratio. The compact completion output prints one line per extra metric.
+* The Langfuse evaluator publishes `case_success` and every non-null extra score with the existing scores. Run verification requires `case_success` on every item.
+* Existing run files are not rewritten. Run-level Langfuse scores (`run_evaluators`) are out of scope.
+
+Verified offline on 2026-11-09: 114 tests pass, covering `case_success` per status, extra-score storage, aggregation and publication, invalid or failing callbacks, reserved names, trace-ID capture with a mocked client, and Demo02 `extraction_correct` (including a wrong extraction behind a correct answer). Publication to Langfuse Cloud with these scores has not yet been run live.
+
 ## Verification and acceptance criteria
 
 The optional multi-step invoker factory, additional source artifacts, per-result

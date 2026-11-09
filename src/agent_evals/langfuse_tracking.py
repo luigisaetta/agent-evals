@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-09
 License: MIT
 Description: Publish synthetic dataset items and evaluation scores to Langfuse.
 """
@@ -69,7 +69,8 @@ def make_evaluator(metric_name: str):
         metric_name: Correctness metric name supplied by the task.
 
     Returns:
-        SDK evaluator publishing validity, execution status and binary correctness.
+        SDK evaluator publishing validity, execution status, case success, binary
+        correctness and any task-specific extra scores.
     """
     def evaluator(*, output: dict, **kwargs) -> list[Evaluation]:
         """Map a completed task result to SDK score objects.
@@ -79,12 +80,17 @@ def make_evaluator(metric_name: str):
             **kwargs: Additional SDK fields; references are not rescored here.
 
         Returns:
-            Status metrics, plus correctness when a valid score exists.
+            Status metrics and case success for every attempt, correctness when a
+            valid score exists, and each applicable extra score.
         """
         scores = [Evaluation(name="valid_output", value=int(output["output_valid"])),
-                  Evaluation(name="execution_status", value=output["status"], data_type="CATEGORICAL")]
+                  Evaluation(name="execution_status", value=output["status"], data_type="CATEGORICAL"),
+                  Evaluation(name="case_success", value=int(output["status"] == "correct"))]
         if output["status"] in {"correct", "incorrect"}:
             scores.append(Evaluation(name=metric_name, value=output["score"]))
+        for name, value in sorted((output.get("extra_scores") or {}).items()):
+            if value is not None:
+                scores.append(Evaluation(name=name, value=value))
         return scores
 
     return evaluator

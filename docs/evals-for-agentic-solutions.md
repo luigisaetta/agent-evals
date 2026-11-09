@@ -254,17 +254,18 @@ The application does not capture authentication headers or private-key material.
 
 ### 8.5 Publish complementary scores
 
-For Express Order, the adapter's correctness metric is `selection_correct`. The tracking layer also publishes two shared metrics:
+For Express Order, the adapter's correctness metric is `selection_correct`. The tracking layer also publishes three shared metrics:
 
 | Score | Type | Interpretation |
 | --- | --- | --- |
 | `selection_correct` | Numeric 0/1 | Exact correctness, emitted only for scored answers |
 | `valid_output` | Numeric 0/1 | Whether parsing produced a valid task answer |
 | `execution_status` | Categorical | Correct, incorrect, invalid output, API error, or evaluator error |
+| `case_success` | Numeric 0/1 | 1 only for a correct answer, 0 for every other attempt |
 
 A scorer failure can have `valid_output=1` while receiving no correctness score: parsing worked, but evaluation did not. If parsing itself fails unexpectedly, output validity remains false.
 
-The average of available `selection_correct` scores uses the valid-scored subset. Inspect status and attempt counts before interpreting it as overall reliability. The local `success_rate_all_attempts` provides the broader denominator; the current integration does not publish that local summary field as a separate run-level Langfuse score.
+The average of available `selection_correct` scores uses the valid-scored subset. Inspect status and attempt counts before interpreting it as overall reliability. The average of `case_success` uses every attempt and equals the local `success_rate_all_attempts`; filtering `case_success = 0` lists every KO case. Run-level aggregate scores are not published.
 
 ### 8.6 Review a run and compare changes
 

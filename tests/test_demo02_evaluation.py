@@ -88,8 +88,10 @@ def _tracking(monkeypatch, fail_update=False, fail_flush=False):
             output = kwargs["task"](item=item)
             scores = kwargs["evaluators"][0](output=output)
             items.append(SimpleNamespace(output=output, evaluations=scores))
+        tracking.experiment_items = items
         return SimpleNamespace(item_results=items, experiment_url="https://example.com/demo02")
 
+    tracking.get_current_trace_id.return_value = "fixture-trace-id"
     tracking.start_as_current_observation.side_effect = observation
     tracking.run_experiment.side_effect = experiment
     if fail_flush:
@@ -112,6 +114,10 @@ def test_end_to_end_runner_continues_after_failures_and_tracks_steps(
             responses.append(_response("invalid JSON"))
         elif index == 3:
             responses.append(RuntimeError("PRIVATE_MUST_NOT_LEAK"))
+        elif index == 5:
+            # Wrong extracted deadline, yet the expected offer is still selected.
+            wrong = dict(extraction, latest_delivery_date="2099-01-01")
+            responses.extend([_response(wrong), _response({"selected_offer_id": expected})])
         else:
             responses.append(_response(extraction))
             if index == 4:
@@ -142,6 +148,11 @@ def test_end_to_end_runner_continues_after_failures_and_tracks_steps(
     assert [r["status"] for r in records] == [
         "correct", "incorrect", "invalid_output", "api_error", "api_error", "correct"]
     assert [r["score"] for r in records] == [1, 0, None, None, None, 1]
+    assert [r["case_success"] for r in records] == [1, 0, 0, 0, 0, 1]
+    assert [r["extra_scores"]["extraction_correct"] for r in records] == [1, 1, 0, None, 1, 0]
+    assert summary["extra_score_summary"] == {
+        "extraction_correct": {"scored_count": 5, "correct_count": 3, "accuracy": 0.6}}
+    assert f"extraction_correct: 3/5 correct; failed: {cases[2]['id']}, {cases[5]['id']}" in captured.out
     assert summary["accuracy"] == 2 / 3 and summary["success_rate_all_attempts"] == 2 / 6
     assert summary["ok_count"] == 2 and summary["ko_count"] == 4
     assert [r["case_id"] for r in summary["ko_cases"]] == [c["id"] for c in cases[1:5]]
@@ -169,6 +180,11 @@ def test_end_to_end_runner_continues_after_failures_and_tracks_steps(
         assert generations[4][1].update.call_args.kwargs["level"] == "ERROR"
         assert generations[5][1].update.call_args.kwargs["status_message"] == "api_error"
         tracking.flush.assert_called_once()
+        assert all(r["trace_id"] == "fixture-trace-id" for r in records)
+        published = [{e.name: e.value for e in item.evaluations} for item in tracking.experiment_items]
+        assert [s["case_success"] for s in published] == [1, 0, 0, 0, 0, 1]
+        assert [s.get("extraction_correct") for s in published] == [1, 1, 0, None, 1, 0]
+        assert "extraction_correct" not in published[3]
         assert tracking.create_dataset.call_args.kwargs["name"].startswith("demo02-express-order-development-")
     else:
         assert summary["publication"] == "disabled"
@@ -246,3 +262,26 @@ def test_validate_case_rejects_unknown_reference_fields():
     case["expected_output"]["scenario"] = "leak"
     with pytest.raises(ValueError, match="Reference"):
         evaluation.validate_case(case)
+
+
+
+def _result_with_extraction(status: str, extracted=None) -> dict:
+    """Build a minimal result whose first step has the given status."""
+    return {"steps": [{"stage": "extract_request", "status": status}], "extracted_request": extracted}
+
+
+def test_score_extraction_covers_every_outcome():
+    """Extraction is 1 on an exact match, 0 on a wrong or invalid step, None otherwise."""
+    case = load_cases(ROOT / evaluation.TASK.default_dataset, ROOT / evaluation.TASK.default_rules,
+                      "all", 1, evaluation.TASK)[0]
+    reference = case["expected_output"]["expected_request"]
+    score = evaluation.score_extraction
+    assert score(case, _result_with_extraction("completed", dict(reference))) == {"extraction_correct": 1}
+    wrong = dict(reference, delivery_location="Elsewhere")
+    assert score(case, _result_with_extraction("completed", wrong)) == {"extraction_correct": 0}
+    assert score(case, _result_with_extraction("invalid_output")) == {"extraction_correct": 0}
+    for status in ("api_error", "internal_error"):
+        assert score(case, _result_with_extraction(status)) == {"extraction_correct": None}
+    assert score(case, {"steps": []}) == {"extraction_correct": None}
+    assert score(_v1_case(), _result_with_extraction("completed", dict(reference))) == {
+        "extraction_correct": None}

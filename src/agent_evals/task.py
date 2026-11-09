@@ -10,6 +10,9 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Callable
 
+# Score names published by the shared runner for every task.
+SHARED_SCORE_NAMES = frozenset({"valid_output", "execution_status", "case_success"})
+
 
 @dataclass(frozen=True)
 class EvaluationTask:
@@ -34,6 +37,9 @@ class EvaluationTask:
             and returns a Responses envelope, optionally with execution_error.
         source_files: Extra repository-relative implementation/prompt artifacts
             whose contents must be hashed into run metadata.
+        extra_scores: Optional callback receiving the case and its result and
+            returning binary metrics by name (0, 1, or None when not applicable),
+            for example the correctness of an intermediate step.
     """
 
     name: str
@@ -50,6 +56,7 @@ class EvaluationTask:
     version: str = "1.0"
     create_invoker: Callable | None = None
     source_files: tuple[Path, ...] = ()
+    extra_scores: Callable[[dict, dict], dict] | None = None
 
 
 def load_task(module_name: str) -> EvaluationTask:
@@ -75,7 +82,7 @@ def load_task(module_name: str) -> EvaluationTask:
         task.metric_name, task.version,
     )):
         raise ValueError("Task identifiers, title and versions must be non-empty strings")
-    if task.metric_name in {"valid_output", "execution_status"}:
+    if task.metric_name in SHARED_SCORE_NAMES:
         raise ValueError("Task metric name conflicts with a shared status metric")
     if not all(callable(callback) for callback in (
         task.validate_case, task.build_instructions, task.parse_output, task.score_output,
@@ -83,4 +90,6 @@ def load_task(module_name: str) -> EvaluationTask:
         raise ValueError("Task callbacks must be callable")
     if task.create_invoker is not None and not callable(task.create_invoker):
         raise ValueError("Task invoker factory must be callable")
+    if task.extra_scores is not None and not callable(task.extra_scores):
+        raise ValueError("Task extra-score callback must be callable")
     return task

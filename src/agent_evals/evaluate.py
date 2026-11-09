@@ -24,7 +24,7 @@ from agent_evals.console import initialization_step, show_banner
 from agent_evals.dataset import file_hash, load_cases
 from agent_evals.errors import describe_api_error
 from agent_evals.oci_model import create_client, invoke_model
-from agent_evals.task import EvaluationTask, load_task
+from agent_evals.task import SHARED_SCORE_NAMES, EvaluationTask, load_task
 
 
 def task_source_hashes(task: EvaluationTask) -> dict:
@@ -76,8 +76,7 @@ def evaluate_case(case: dict, invoke, task: EvaluationTask) -> dict:
             result["status"] = error["kind"] if error["kind"] in {
                 "api_error", "invalid_output",
             } else "agent_error"
-            result["latency_seconds"] = round(time.perf_counter() - started, 6)
-            return result
+            return _finish_result(result, case, task, started)
         try:
             if response["response_status"] != "completed":
                 raise ValueError("Response did not complete")
@@ -101,8 +100,77 @@ def evaluate_case(case: dict, invoke, task: EvaluationTask) -> dict:
             except Exception as error:
                 result["status"] = "evaluator_error"
                 result["error"] = {"type": type(error).__name__}
+    return _finish_result(result, case, task, started)
+
+
+def _extra_scores(case: dict, result: dict, task: EvaluationTask) -> dict:
+    """Compute optional task-specific binary scores without changing the case status.
+
+    Args:
+        case: Validated dataset case with its reference.
+        result: Case result after status classification.
+        task: Task descriptor, possibly without an extra-score callback.
+
+    Returns:
+        Metric names mapped to 0, 1 or None (not applicable).
+
+    Raises:
+        ValueError: If the callback returns an invalid name or value.
+    """
+    if task.extra_scores is None:
+        return {}
+    scores = task.extra_scores(case, result)
+    if not isinstance(scores, dict):
+        raise ValueError("Extra scores must be a dictionary")
+    for name, value in scores.items():
+        if (not isinstance(name, str) or not name.strip() or name in SHARED_SCORE_NAMES
+                or name == task.metric_name):
+            raise ValueError("Invalid or conflicting extra-score name")
+        if value is not None and (isinstance(value, bool) or value not in (0, 1)):
+            raise ValueError("Extra scores must be 0, 1 or None")
+    return scores
+
+
+def _finish_result(result: dict, case: dict, task: EvaluationTask, started: float) -> dict:
+    """Add case success, optional extra scores and latency to a classified result.
+
+    Args:
+        result: Case result whose status is final.
+        case: Validated dataset case with its reference.
+        task: Task descriptor.
+        started: perf_counter value taken before invocation.
+
+    Returns:
+        The same result, completed in place.
+    """
+    result["case_success"] = int(result["status"] == "correct")
+    try:
+        result["extra_scores"] = _extra_scores(case, result, task)
+    except Exception as error:
+        result["extra_scores"] = {}
+        result["extra_score_error"] = {"type": type(error).__name__}
     result["latency_seconds"] = round(time.perf_counter() - started, 6)
     return result
+
+
+def summarize_extra_scores(results: list[dict]) -> dict:
+    """Aggregate each extra metric over the cases where it applies.
+
+    Args:
+        results: Persisted case results.
+
+    Returns:
+        For each metric: scored cases, cases equal to 1, and their ratio.
+    """
+    totals = {}
+    for result in results:
+        for name, value in (result.get("extra_scores") or {}).items():
+            if value is not None:
+                entry = totals.setdefault(name, {"scored_count": 0, "correct_count": 0})
+                entry["scored_count"] += 1
+                entry["correct_count"] += value
+    return {name: entry | {"accuracy": entry["correct_count"] / entry["scored_count"]}
+            for name, entry in sorted(totals.items())}
 
 
 def summarize(results: list[dict], selected_count: int) -> dict:
@@ -179,6 +247,12 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
         ) if tracking and task_definition.create_invoker is None else nullcontext()
         with observation as generation:
             result = evaluate_case(case, invoke, task_definition)
+            if tracking:
+                try:
+                    trace_id = tracking.get_current_trace_id()
+                except Exception:
+                    trace_id = None
+                result["trace_id"] = trace_id if isinstance(trace_id, str) else None
             result["metadata"] = result["metadata"] | {
                 "model": metadata.get("model"), "task_name": task_definition.name,
             }
@@ -219,7 +293,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             )
             experiment_url = experiment.experiment_url
             if len(experiment.item_results) != len(cases) or any(
-                not {"valid_output", "execution_status"}.issubset({e.name for e in item.evaluations})
+                not SHARED_SCORE_NAMES.issubset({e.name for e in item.evaluations})
                 or (isinstance(item.output, dict) and item.output.get("score") is not None
                     and task_definition.metric_name not in {e.name for e in item.evaluations})
                 for item in experiment.item_results
@@ -255,6 +329,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             "ko_count": len(results) - ok_count,
             "ko_cases": [{"case_id": r["case_id"], "status": r["status"], "error": r["error"]}
                          for r in results if r["status"] != "correct"],
+            "extra_score_summary": summarize_extra_scores(results),
         }
         (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         if compact_progress:
@@ -264,6 +339,10 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
                 stage = (failure["error"] or {}).get("stage")
                 detail = f", stage={stage}" if stage else ""
                 print(f"  {failure['case_id']}: {failure['status']}{detail}")
+            for name, entry in summary["extra_score_summary"].items():
+                failed = [r["case_id"] for r in results if (r.get("extra_scores") or {}).get(name) == 0]
+                print(f"{name}: {entry['correct_count']}/{entry['scored_count']} correct"
+                      + (f"; failed: {', '.join(failed)}" if failed else ""))
     return summary
 
 
