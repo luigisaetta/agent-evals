@@ -102,10 +102,10 @@ The current contract supports **binary correctness scoring**, local JSON dataset
 
 | Demo | Input and execution | Evaluation launcher |
 | --- | --- | --- |
-| Demo01 | Structured request and six offers; one model call | `./run_experiment.sh "Demo01 baseline"` |
+| [Demo01](https://github.com/luigisaetta/agent-evals/blob/main/demo01/README.md) | Introductory environment setup and evaluation: structured request and six offers; one model call | `./demo01/run_experiment.sh "Demo01 baseline"` |
 | [Demo02](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) | English request and six JSON offers; LangGraph extraction followed by selection, two model calls | `./demo02/run_experiment.sh "Demo02 baseline"` |
 
-Both publish to Langfuse by default and use `OCI_MODEL` from `.env`. Add `--split all` to evaluate all 100 cases, or keep the default 80-case evaluation split. Demo02 shows live OK/KO counts and logs KO case IDs at the end. Each result records the model in its metadata. New demos have their own folder, adapter and launcher; the original Demo01 file locations are preserved.
+Both publish to Langfuse by default and use `OCI_MODEL` from `.env`. Demo01 defaults to 80 evaluation cases (100 with `--split all`); Demo02's v2 dataset defaults to 240 evaluation cases (300 with `--split all`). Demo02 shows live OK/KO counts and logs KO case IDs at the end. Each result records the model in its metadata. Each demo has its own folder, adapter and launcher; the root `run_experiment.sh` remains a compatibility forwarder for Demo01.
 
 ## Tools used
 
@@ -120,7 +120,9 @@ Both publish to Langfuse by default and use `OCI_MODEL` from `.env`. Add `--spli
 | tqdm and initialization logs | Experiment progress and visibility into preparation steps |
 | LangGraph | Demo02's sequential request-extraction and offer-selection agent |
 
-## Try the current demo
+## Start with Demo01
+
+The [Demo01 guide](https://github.com/luigisaetta/agent-evals/blob/main/demo01/README.md) walks through environment setup and first experiments, and explains why a short, structured selection task offers limited discrimination once a model already solves its cases reliably.
 
 Run commands from the repository root. Create the environment if it does not exist, then activate it and install dependencies:
 
@@ -136,7 +138,7 @@ These checks need no credentials and make no OCI calls or Langfuse uploads:
 
 ```sh
 python -m pytest -q
-./run_experiment.sh "Offline validation" --dry-run --split all
+./demo01/run_experiment.sh "Offline validation" --dry-run --split all
 ```
 
 ### 2. Configure the services
@@ -150,13 +152,13 @@ OCI inference uses the signing key referenced by that profile. Actual credential
 This invokes OCI and publishes the selected case, execution, and scores to Langfuse:
 
 ```sh
-./run_experiment.sh "Development smoke test" --split development --limit 1
+./demo01/run_experiment.sh "Development smoke test" --split development --limit 1
 ```
 
 ### 4. Run the held-out evaluation
 
 ```sh
-./run_experiment.sh "Baseline evaluation" --split evaluation --sleep-seconds 5
+./demo01/run_experiment.sh "Baseline evaluation" --split evaluation --sleep-seconds 5
 ```
 
 An experiment name is mandatory. The default dataset split runs **80 evaluation cases**; `--split all` runs all 100 cases, explicitly combining development and evaluation data. `--no-langfuse` keeps OCI execution and local results without contacting Langfuse.
@@ -167,7 +169,7 @@ Results are written to `data/runs/<run-id>/` as `metadata.json`, `results.jsonl`
 
 ## Evidence and current scope
 
-As of **2026-11-09**, **114 automated tests pass**, including cross-task execution, lossless Demo02 request conversion, the graded-difficulty Demo02 v2 dataset, the two-step LangGraph agent, compact evaluation progress and mocked Langfuse publication. A one-case live Demo02 development run verified OCI IAM inference, a correct selection, persisted Langfuse scores and model metadata, and two remotely confirmed generation traces. See the [Demo02 agent guide](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) for its execution and verification scope.
+As of **2026-11-09**, **118 automated tests pass**, including Demo01 launcher relocation and import compatibility, cross-task execution, lossless Demo02 request conversion, the graded-difficulty Demo02 v2 dataset, the two-step LangGraph agent, compact evaluation progress and mocked Langfuse publication. A one-case live Demo02 development run verified OCI IAM inference, a correct selection, persisted Langfuse scores and model metadata, and two remotely confirmed generation traces. See the [Demo02 agent guide](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) for its execution and verification scope.
 
 This repository is an exploration of the evaluation method, supported by a concrete implementation. It does not claim a full-agent performance benchmark. Extending the evidence to a complete agent would require evaluating its other responsibilities and interactions, using representative cases and agreed acceptance criteria.
 
@@ -179,6 +181,7 @@ This repository is an exploration of the evaluation method, supported by a concr
 * [Synthetic dataset and generation](https://github.com/luigisaetta/agent-evals/blob/main/data/datasets/README.md)
 * [Demo02: English delivery requests with unchanged JSON offers](https://github.com/luigisaetta/agent-evals/blob/main/docs/demo02-dataset.md)
 * [Demo02: the two-step LangGraph agent](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md)
+* [Demo01: setup, first evaluations and benchmark limitations](https://github.com/luigisaetta/agent-evals/blob/main/demo01/README.md)
 * [Reference catalogs](https://github.com/luigisaetta/agent-evals/blob/main/data/catalogs/README.md)
 * [Reusable evaluation specification](https://github.com/luigisaetta/agent-evals/blob/main/specs/reusable-evaluation.md)
 * [Changelog](https://github.com/luigisaetta/agent-evals/blob/main/CHANGELOG.md)

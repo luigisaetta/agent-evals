@@ -38,14 +38,20 @@ and `./demo02/run_experiment.sh "Demo02 baseline" --split all`.
 
 Every invocation requires a non-blank `--experiment-name`, including dry runs. `--run-name` remains an alias. The supplied name is used unchanged as the Langfuse experiment name; the displayed run name adds a unique execution suffix to keep repeated runs distinct.
 
-The executable launcher in the repository root selects the `agent-evals` Conda environment and forwards options to Python:
+The executable Demo01 launcher selects the `agent-evals` Conda environment and forwards options to Python:
 
 ```sh
-./run_experiment.sh "Express Order baseline" --split evaluation --sleep-seconds 5
-./run_experiment.sh "Offline validation" --dry-run --split all
+./demo01/run_experiment.sh "Express Order baseline" --split evaluation --sleep-seconds 5
+./demo01/run_experiment.sh "Offline validation" --dry-run --split all
 ```
 
 Quote names containing spaces. The launcher runs from the repository root, preserves the Python exit code, and accepts `--help` before a name to display usage. Direct Python commands are shown below.
+
+The root `run_experiment.sh` remains a compatibility forwarder. The dedicated
+Python entry point is `PYTHONPATH=src:. python -m demo01.evaluate`; the shared
+`agent_evals.evaluate` CLI remains available. See the
+[Demo01 introduction](https://github.com/luigisaetta/agent-evals/blob/main/demo01/README.md)
+for setup and the scope of this starting benchmark.
 
 Validate the complete dataset offline, without credentials or uploads:
 

@@ -13,7 +13,7 @@ An `EvaluationTask` descriptor supplies task name/title, relative default datase
 3. `parse_output(raw_output, input)`: parse and validate the model answer, returning a JSON-compatible object.
 4. `score_output(output, expected_output)`: assign binary correctness (0 or 1).
 
-The Express Order adapter is `agent_evals.tasks.offer_selection` and exports `TASK`. It owns all offer fields, the six-offer requirement, response-ID membership, exact-match scoring, business title, prompt and selection metric name. Existing generator/reference-selector modules remain specific dataset-authoring tools and do not move or change their generated artifacts.
+The Express Order adapter is `demo01.evaluation` and exports `TASK`; `agent_evals.tasks.offer_selection` remains a compatibility re-export module for older commands and Demo02 imports. It owns all offer fields, the six-offer requirement, response-ID membership, exact-match scoring, business title, prompt and selection metric name. Existing generator/reference-selector modules remain specific dataset-authoring tools and do not move or change their generated artifacts. The dedicated folder and introductory README are specified in [the Demo01 layout specification](https://github.com/luigisaetta/agent-evals/blob/main/specs/demo01-folder.md).
 
 ## Shared runner
 

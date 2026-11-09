@@ -29,7 +29,7 @@ The first node sees only the natural-language request and [extraction instructio
 
 The extracted deadline is always the exclusive deadline: exclusive wording keeps the stated date, while inclusive ("no later than D") and relative ("N calendar days after A") wording are converted, as specified in [the v2 dataset specification](https://github.com/luigisaetta/agent-evals/blob/main/specs/demo02-extraction-difficulty.md). Part identifiers are normalized to `PART-NNN`. Missing, null, additional or duplicate fields, invalid dates, malformed JSON, and incomplete generations stop execution before the second call.
 
-The second node combines the validated extracted request with the unchanged six offers. It reuses Demo01's [input validation, prompt builder and response parser](https://github.com/luigisaetta/agent-evals/blob/main/src/agent_evals/tasks/offer_selection.py). The model selects the offer; no deterministic ranking algorithm supplies its answer.
+The second node combines the validated extracted request with the unchanged six offers. It reuses Demo01's [input validation, prompt builder and response parser](https://github.com/luigisaetta/agent-evals/blob/main/demo01/evaluation.py). The model selects the offer; no deterministic ranking algorithm supplies its answer.
 
 ## Run one dataset case
 
@@ -230,6 +230,9 @@ experiment item, model metadata, correctness/validity/status scores and exactly
 two generation observations with the configured model. No full-dataset accuracy
 claim follows from this smoke test.
 
-The root `run_experiment.sh` continues to launch Demo01 by default. Future demos
+Demo01 now has its own `demo01/run_experiment.sh` launcher. The root
+`run_experiment.sh` is a compatibility forwarder to it; Demo02 commands are
+unchanged. Its selection helpers resolve through the preserved
+`agent_evals.tasks.offer_selection` imports to `demo01.evaluation`. Future demos
 follow the folder and adapter conventions in the
 [task adaptation guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md).

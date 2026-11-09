@@ -325,7 +325,7 @@ After creating or activating the `agent-evals` Conda environment and installing 
 
 ```sh
 python -m pytest -q
-./run_experiment.sh "Offline validation" --dry-run --split all
+./demo01/run_experiment.sh "Offline validation" --dry-run --split all
 ```
 
 These verify the implementation and dataset structure without contacting OCI or Langfuse. They do not measure model accuracy.
@@ -333,13 +333,13 @@ These verify the implementation and dataset structure without contacting OCI or 
 After configuring OCI signing and the environment variables, run one development case:
 
 ```sh
-./run_experiment.sh "Express Order smoke test" --split development --limit 1
+./demo01/run_experiment.sh "Express Order smoke test" --split development --limit 1
 ```
 
 Inspect the local summary and confirm the dataset item, experiment, and scores in Langfuse. Then run the held-out cases:
 
 ```sh
-./run_experiment.sh "Express Order baseline" --split evaluation --sleep-seconds 5
+./demo01/run_experiment.sh "Express Order baseline" --split evaluation --sleep-seconds 5
 ```
 
 Use the same dataset and evaluator definitions for subsequent comparisons. The [execution guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/evaluation.md) explains configuration, exit codes, result files, and diagnostics.
@@ -359,12 +359,12 @@ The [task descriptor](https://github.com/luigisaetta/agent-evals/blob/main/src/a
 | `parse_output` | Parsing and semantic validity of the model answer |
 | `score_output` | Binary comparison with the expected business result |
 
-The adapter also supplies display names, default data/rule paths, a dataset namespace, task version, and correctness-metric name. The [Express Order adapter](https://github.com/luigisaetta/agent-evals/blob/main/src/agent_evals/tasks/offer_selection.py) provides a concrete implementation.
+The adapter also supplies display names, default data/rule paths, a dataset namespace, task version, and correctness-metric name. The [Express Order adapter](https://github.com/luigisaetta/agent-evals/blob/main/demo01/evaluation.py) provides a concrete implementation.
 
 For another task, define the success criterion first, create an appropriate reference dataset, implement the four callbacks, and select the module using `--task`. For example, if a message-priority adapter has been added as `agent_evals.tasks.message_priority`:
 
 ```sh
-./run_experiment.sh "Priority baseline" --task agent_evals.tasks.message_priority
+./demo01/run_experiment.sh "Priority baseline" --task agent_evals.tasks.message_priority
 ```
 
 That module name is an adaptation example, not an additional production adapter shipped with this demo. The [cross-task tests](https://github.com/luigisaetta/agent-evals/blob/main/tests/test_task_reuse.py) demonstrate priority classification with plain text inputs and label outputs through the shared pipeline.

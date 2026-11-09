@@ -18,10 +18,10 @@ Synthetic generation and reference-answer creation remain task-specific authorin
 | `oci_model.py` | OCI signing and Responses transport | No |
 | `langfuse_tracking.py` | Dataset synchronization, experiment and score mapping | No |
 | `console.py`, `errors.py`, `config.py` | Shared runtime utilities | No |
-| `tasks/offer_selection.py` | Express Order prompt, validation, parsing and scoring | Replace with your adapter |
+| `demo01/evaluation.py` | Express Order prompt, validation, parsing and scoring | Replace with your adapter |
 | Rules, dataset, optional generator/oracle | Business rules and reference examples | Supply your own |
 
-The [Express Order adapter](../src/agent_evals/tasks/offer_selection.py) is the default. The [classification test fixture](../tests/test_task_reuse.py) demonstrates a different task with plain text inputs, priority-label outputs, and another metric through the same pipeline, including the mocked Langfuse path.
+The [Express Order adapter](https://github.com/luigisaetta/agent-evals/blob/main/demo01/evaluation.py) is the default, with legacy imports preserved by `agent_evals.tasks.offer_selection`. The [classification test fixture](../tests/test_task_reuse.py) demonstrates a different task with plain text inputs, priority-label outputs, and another metric through the same pipeline, including the mocked Langfuse path.
 
 ## 1. Implement one adapter module
 
@@ -99,14 +99,14 @@ Generate real hashes for the final file contents using `hashlib.sha256(path.read
 If the module is `agent_evals.tasks.message_priority`, validate it without credentials:
 
 ```sh
-./run_experiment.sh "Priority validation" \
+./demo01/run_experiment.sh "Priority validation" \
   --task agent_evals.tasks.message_priority --dry-run --split all
 ```
 
 Run the same pipeline with OCI and Langfuse:
 
 ```sh
-./run_experiment.sh "Priority baseline" \
+./demo01/run_experiment.sh "Priority baseline" \
   --task agent_evals.tasks.message_priority --sleep-seconds 5
 ```
 
@@ -145,12 +145,15 @@ This initial reusable contract supports **binary correctness**, JSON datasets, a
 
 ## Organizing multiple demos
 
-Keep the original Demo01 files in their existing locations. Each additional demo
-gets a dedicated top-level package and launcher, following
+Each demo has a dedicated top-level package and launcher, following
 [Demo02](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md):
 
 ```text
 src/agent_evals/          Shared configuration, transport, runner and publication
+demo01/                  Introductory structured selection, adapter, CLI and README
+  evaluation.py          Concrete adapter and reused selection helpers
+  evaluate.py            Small wrapper selecting Demo01's TASK
+  run_experiment.sh      Conda launcher with a required experiment name
 demo02/                  Agent, prompts, adapter, CLI, specs and README
   evaluation.py          Exports this demo's TASK
   evaluate.py            Small wrapper selecting TASK and compact progress
@@ -164,7 +167,13 @@ New adapters use distinct task names and Langfuse dataset namespaces. Reuse the
 shared CLI rather than copying its startup, dataset upload, scoring or result
 storage code. A new launcher adds both the root and `src` to `PYTHONPATH`; see
 [the Demo02 launcher](https://github.com/luigisaetta/agent-evals/blob/main/demo02/run_experiment.sh).
-The root launcher continues to select Demo01 by default.
+The root launcher forwards legacy commands to Demo01. The old
+`agent_evals.tasks.offer_selection` module re-exports the canonical Demo01
+objects so Demo02 and dataset-generator imports continue to work. The shared
+CLI keeps its compatible default task path. No Demo02 model/prompt/settings
+change is required by this layout refactor; source provenance records the moved
+callback location. Shared generation and reference-selector utilities remain
+under `src/agent_evals` because both demos use them.
 
 ### Multi-step agent execution
 
