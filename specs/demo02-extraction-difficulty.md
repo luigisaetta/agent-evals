@@ -87,3 +87,20 @@ Offline `pytest` only. Measuring the effect on real models (extraction accuracy 
 * The Demo02 evaluation adapter accepts both reference shapes and uses this dataset by default; an offline `--dry-run --split all` validates 300 records (see `demo02/evaluation-spec.md`).
 * A first generation stored the source `dataset_version` (`1.0`) in each record while the manifest declared `2.0`, which the shared loader rejects. Records now carry `dataset_version: 2.0` and `source_dataset_version: 1.0`, and a test runs the shared loader.
 * Not yet verified: live extraction accuracy per level.
+
+## Live results (2026-11-09)
+
+Full held-out runs (240 evaluation records, dataset SHA-256 prefix `33dcebb1b1c8`, 2,048 output tokens), counted from each run's local `results.jsonl`. An extraction error is an extraction different from `expected_request`, including invalid output; a hidden error is an extraction error with a correct final answer.
+
+| Model | Run ID | Correct | Incorrect | Invalid output | Extraction errors (L0/L1/L2) | Hidden |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| `openai.gpt-oss-20b` | `20261109T094835Z-7af10c48` | 232 | 5 | 3 | 0/1/8 | 3 |
+| `openai.gpt-oss-20b` | `20261109T111025Z-0c82644a` | 233 | 5 | 2 | 0/1/10 | 5 |
+| `openai.gpt-oss-120b` | `20261109T101911Z-5ce9b1ce` | 240 | 0 | 0 | 0/0/2 | 2 |
+| `openai.gpt-6.1-terra` | `20261109T121943Z-d0757262` | 239 | 0 | 1 | 0/1/0 | 0 |
+
+* Four `gpt-oss-20b` invalid outputs were business-day extractions truncated at the token limit (`incomplete`); one (`EO-091-L2`, moved deadline) returned a null deadline.
+* `EO-081-L1` and `EO-081-L2` (first 20b run) and `EO-081-L2` (second) are selection errors on a correct extraction.
+* The `gpt-6.1-terra` failure (`EO-061-L1`) computed the right date but wrote `2027-2027-11-25`.
+* The two 20b runs use identical inputs and settings; their failing cases partly differ.
+* Langfuse publication was `submitted_unverified`; remote scores were not checked through the read API.

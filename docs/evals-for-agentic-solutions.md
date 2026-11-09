@@ -4,7 +4,7 @@
 
 An agent demonstration becomes more useful when its behavior can be checked repeatedly against explicit expectations. This project shows how to build that feedback loop: define a task, create representative inputs, establish correct answers, run the agent, and inspect the evidence behind its successes and failures.
 
-The example is **Automotive Express Order offer selection**. Its scope is deliberately narrow, allowing us to verify a business decision precisely while developing an evaluation pipeline that can be adapted to other tasks.
+The example is **Automotive Express Order offer selection**. Its scope is deliberately narrow, allowing us to verify a business decision precisely while developing an evaluation pipeline that can be adapted to other tasks. Demo01 evaluates a single model-backed decision on structured input. Demo02 evaluates a two-step agent that first reads a natural-language request and then selects the offer, and shows how to score each step separately (section 9).
 
 The implementation, synthetic data, specifications, and instructions are available in the [Agent Evals GitHub repository](https://github.com/luigisaetta/agent-evals).
 
@@ -267,6 +267,8 @@ A scorer failure can have `valid_output=1` while receiving no correctness score:
 
 The average of available `selection_correct` scores uses the valid-scored subset. Inspect status and attempt counts before interpreting it as overall reliability. The average of `case_success` uses every attempt and equals the local `success_rate_all_attempts`; filtering `case_success = 0` lists every KO case. Run-level aggregate scores are not published.
 
+A task adapter can add its own binary scores. Demo02 publishes `extraction_correct`, which scores its first step independently of the final answer (section 9.4). Each local result also records the Langfuse `trace_id`, so a case in `results.jsonl` can be opened directly in the UI.
+
 ### 8.6 Review a run and compare changes
 
 A useful review sequence is:
@@ -303,13 +305,98 @@ The initial deployment target is Langfuse Cloud. The application configures the 
 
 Deploying that instance or migrating historical project data is separate work. A configurable URL is useful preparation, not an implemented historical-data migration procedure.
 
-## 9. Tools and their responsibilities
+## 9. Extending the demo: a two-step agent
+
+Demo01 hands the model a structured request. A real agent usually receives text: an email or a message from a plant. Demo02 keeps the same offers, rules and expected answers, but replaces the structured request with an English request and asks a two-step agent to solve it.
+
+### 9.1 The agent
+
+The agent is a [LangGraph graph](https://github.com/luigisaetta/agent-evals/blob/main/demo02/agent-spec.md) with two model-backed nodes:
+
+```text
+START -> extract_request -> select_offer -> END
+```
+
+1. `extract_request` reads only the natural-language request and returns `part_id`, `delivery_location` and the exclusive `latest_delivery_date`.
+2. `select_offer` combines the validated extraction with the unchanged offers and reuses the Demo01 prompt, parser and output contract.
+
+Both nodes call the same OCI model. An invalid extraction stops the graph before the second call, so a failure is attributed to the step that caused it. Each node is a separate generation observation in the Langfuse trace.
+
+### 9.2 Why the first dataset was not enough
+
+The first Demo02 dataset rephrased each request in varied English. Three regular expressions (a part number, a city name and a date) recovered every request exactly. The extraction step could not separate one model from another, so measuring it would only have confirmed that it was easy.
+
+A useful check when building a dataset is therefore a **naive baseline**: if a trivial program solves a step, the data does not test that step.
+
+### 9.3 Graded difficulty with paired cases
+
+The [v2 dataset](https://github.com/luigisaetta/agent-evals/blob/main/specs/demo02-extraction-difficulty.md) derives three variants of each source case. Offers and the expected offer stay unchanged; only the request text changes:
+
+| Level | Request | What the extraction must do |
+| --- | --- | --- |
+| `L0` | One sentence, as in v1 | Copy the stated facts |
+| `L1` | One or two sentences | Convert an inclusive deadline or "N calendar days after a date", normalize a part number such as "part no. 25", and ignore a discontinued part |
+| `L2` | Short email | Compute the deadline from weeks and days, business days, days before an event, or a moved deadline; ignore a distractor city, the email date, a previous delivery date and another part |
+
+The design choices that make the levels informative:
+
+* **Pairing.** The same business case appears at every level, so a difference between levels is caused by the wording, not by different offers.
+* **Correct by construction.** Text is composed from fixed fragments by code, not by a model, and tests recompute every deadline independently of the generator.
+* **Traps aligned with offers.** When an offer carries another part or city, that value is the distractor in the text, so an extraction error leads to the trap offer rather than to a harmless value.
+* **Sensitivity.** A one-day deadline error changes the selected offer in 43 of 100 L1 and 43 of 100 L2 cases. In the others the agent can be wrong and still answer correctly.
+* **Baseline.** The naive extractor is exact on all L0 records and on none of the L1 or L2 records.
+
+The first version of v2 was still too easy: `openai.gpt-oss-20b` extracted 237 of 240 requests exactly. The levels were made harder in place before the measurements below. A dataset that every candidate solves gives no information about the differences between them.
+
+### 9.4 Scoring each step
+
+The final answer alone hides extraction errors. When an extraction error does not change the winning offer, `selection_correct` is 1 and the error is invisible.
+
+The v2 reference therefore contains both the expected offer and the expected extraction:
+
+```json
+{"expected_offer_id": "EO-061-OFF-05",
+ "expected_request": {"part_id": "PART-025", "delivery_location": "Vienna",
+                      "latest_delivery_date": "2027-11-25"}}
+```
+
+The Demo02 adapter publishes `extraction_correct` next to the shared scores. It is 1 when the extraction equals `expected_request` exactly, 0 for a different or invalid extraction (including truncated output), and absent when no extraction was attempted. Reading `case_success` and `extraction_correct` together separates four outcomes:
+
+| `extraction_correct` | `case_success` | Interpretation |
+| ---: | ---: | --- |
+| 1 | 1 | Both steps correct |
+| 0 | 0 | Extraction error that caused the KO |
+| 1 | 0 | Selection error on a correct extraction |
+| 0 | 1 | Hidden extraction error: wrong extraction, correct answer |
+
+### 9.5 Observed results
+
+Four runs on the 240 held-out evaluation records, all on 2026-11-09, with the same dataset (SHA-256 prefix `33dcebb1b1c8`), rules and prompts and a 2,048-token output limit. Counts come from the local `results.jsonl` of each run:
+
+| Model | Run ID | Correct | Incorrect | Invalid output | Extraction errors | Hidden extraction errors |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `openai.gpt-oss-20b` | `20261109T094835Z-7af10c48` | 232 | 5 | 3 | 9 (1 L1, 8 L2) | 3 |
+| `openai.gpt-oss-20b` | `20261109T111025Z-0c82644a` | 233 | 5 | 2 | 11 (1 L1, 10 L2) | 5 |
+| `openai.gpt-oss-120b` | `20261109T101911Z-5ce9b1ce` | 240 | 0 | 0 | 2 (L2) | 2 |
+| `openai.gpt-6.1-terra` | `20261109T121943Z-d0757262` | 239 | 0 | 1 | 1 (L1) | 0 |
+
+What these runs show:
+
+* **No L0 extraction error in any run.** The errors appear where the text requires interpretation, mostly in L2 date arithmetic.
+* **Final accuracy understates extraction errors.** `gpt-oss-120b` answers all 240 cases correctly, but two of its L2 extractions are wrong. Without the step score this would look like a perfect run.
+* **Errors have different causes.** For `gpt-oss-20b`, four of the five invalid outputs were responses truncated at the token limit while counting business days; the fifth returned a null deadline for a moved deadline. In the first run, two KO cases (`EO-081-L1`, `EO-081-L2`) were selection errors on a correct extraction. The only `gpt-6.1-terra` failure had a correct computation, but the model wrote the date as `2027-2027-11-25`, which failed validation.
+* **Repeated runs differ.** The two `gpt-oss-20b` runs use identical inputs and settings, yet the failing cases are partly different (8 and 7 KO; 9 and 11 extraction errors). A single run is one sample of model behavior, not a fixed property of the model.
+
+These are single runs on a public, synthetic, balanced dataset. They compare the models on these scenarios only; they are not a general benchmark. Langfuse publication was reported as `submitted_unverified`; the counts above are taken from the local results.
+
+## 10. Tools and their responsibilities
 
 | Tool or artifact | Responsibility in this project |
 | --- | --- |
 | Python and Conda | Run generation, offline checks, and live experiments in the `agent-evals` environment |
 | OCI Generative AI Responses API | Execute the model-backed task |
 | OpenAI Python SDK | Supply the Responses request/response interface targeting OCI |
+| LangGraph | Run the two-step Demo02 agent graph |
 | HTTPX and `oci-genai-auth` | Provide the HTTP client and OCI IAM request signing |
 | Langfuse Cloud and SDK | Store selected dataset cases, organize experiments, trace executions, and attach scores |
 | JSON catalogs, dataset, and manifest | Preserve inspectable source data, reference labels, and provenance |
@@ -319,7 +406,7 @@ Deploying that instance or migrating historical project data is separate work. A
 
 The [dependency file](https://github.com/luigisaetta/agent-evals/blob/main/requirements.txt) records the supported client versions. The runtime configuration is illustrated by [.env.example](https://github.com/luigisaetta/agent-evals/blob/main/.env.example); actual credentials remain local.
 
-## 10. A practical sequence for trying the demo
+## 11. A practical sequence for trying the demos
 
 After creating or activating the `agent-evals` Conda environment and installing dependencies, begin with offline checks:
 
@@ -344,9 +431,16 @@ Inspect the local summary and confirm the dataset item, experiment, and scores i
 
 Use the same dataset and evaluator definitions for subsequent comparisons. The [execution guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/evaluation.md) explains configuration, exit codes, result files, and diagnostics.
 
-The repository records a successful one-case OCI/Langfuse integration test before the reusable-task refactor. That refactor has been checked offline, including a different classification task and mocked Langfuse publication. These observations should not be presented as a full-dataset model benchmark.
+Demo02 has its own launcher. Validate offline first, then run the held-out records of the v2 dataset:
 
-## 11. Using this project as a starting point
+```sh
+./demo02/run_experiment.sh "Demo02 validation" --dry-run --split all
+./demo02/run_experiment.sh "Demo02 evaluation" --sleep-seconds 3
+```
+
+The [Demo02 README](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) describes its options and outputs. Section 9.5 records the full held-out runs measured so far; for Demo01, the repository records a one-case OCI/Langfuse integration test.
+
+## 12. Using this project as a starting point
 
 The reusable part of the project handles dataset envelopes, manifest checks, provider access, pacing, logging, progress, result persistence, diagnostics, and Langfuse integration. Business-specific behavior belongs in one adapter module plus its rules and data.
 
@@ -359,7 +453,7 @@ The [task descriptor](https://github.com/luigisaetta/agent-evals/blob/main/src/a
 | `parse_output` | Parsing and semantic validity of the model answer |
 | `score_output` | Binary comparison with the expected business result |
 
-The adapter also supplies display names, default data/rule paths, a dataset namespace, task version, and correctness-metric name. The [Express Order adapter](https://github.com/luigisaetta/agent-evals/blob/main/demo01/evaluation.py) provides a concrete implementation.
+The adapter also supplies display names, default data/rule paths, a dataset namespace, task version, and correctness-metric name. An optional `extra_scores` callback returns additional binary scores for each case, such as Demo02's `extraction_correct`; the runner validates them, stores them in the local results and publishes them to Langfuse. The [Express Order adapter](https://github.com/luigisaetta/agent-evals/blob/main/demo01/evaluation.py) provides a concrete implementation.
 
 For another task, define the success criterion first, create an appropriate reference dataset, implement the four callbacks, and select the module using `--task`. For example, if a message-priority adapter has been added as `agent_evals.tasks.message_priority`:
 
@@ -371,11 +465,13 @@ That module name is an adaptation example, not an additional production adapter 
 
 New local results use generic `output` and `expected_output` fields, while the summary uses `accuracy`. A different task can therefore represent its own answer without introducing procurement fields into the runner or tracking code.
 
-The current contract supports binary correctness, local JSON datasets, natural-language rules, and OCI Responses. Fractional or multiple domain metrics, other providers, more complex interaction trajectories, and generalized synthetic generation would need explicit extensions. The [adaptation guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md) covers the concrete file contracts and result-schema migration.
+The current contract supports a binary correctness score plus optional binary extra scores, local JSON datasets, natural-language rules, and OCI Responses. Fractional metrics, other providers, more complex interaction trajectories, and generalized synthetic generation would need explicit extensions. The [adaptation guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md) covers the concrete file contracts and result-schema migration.
 
-## 12. Reading the evidence responsibly
+## 13. Reading the evidence responsibly
 
 The demo establishes a method for collecting evidence about a task. Its strongest claims are about explicit rules, reproducible cases, transparent scoring, observable execution, and reuse of the surrounding pipeline.
+
+Demo02 adds three practical lessons. Check that a trivial baseline cannot solve the data. Score the intermediate steps, because a correct final answer can hide a wrong intermediate result. Repeat runs before attributing a small difference to a model or prompt change.
 
 Before applying it to a production agent, expand coverage to the real input distribution, define policies for ambiguous or impossible requests, review reference labels with domain experts, and choose acceptance criteria appropriate to the business consequences. Add workflow-level tests for the agent's other responsibilities.
 
