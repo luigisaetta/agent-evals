@@ -96,7 +96,16 @@ The shared runner handles dataset envelopes, provenance checks, OCI access, paci
 
 A new use case supplies that module, a rules file, and a dataset with its manifest. Select it using `--task`; existing commands use the Express Order adapter by default. A classification fixture verifies reuse with text inputs, label outputs, and another metric.
 
-The current contract supports **binary correctness scoring**, local JSON datasets, and OCI Responses. Other scoring schemes, providers, and complete multi-step agent trajectories would require explicit extensions. See [Adapting the runner to another task](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md).
+The current contract supports **binary correctness scoring**, local JSON datasets, and OCI Responses. An optional invoker factory supports multi-step agents with their own pacing and generation observations, as demonstrated by Demo02. Other scoring schemes and providers require explicit extensions. See [Adapting the runner to another task](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md).
+
+## Demonstrations
+
+| Demo | Input and execution | Evaluation launcher |
+| --- | --- | --- |
+| Demo01 | Structured request and six offers; one model call | `./run_experiment.sh "Demo01 baseline"` |
+| [Demo02](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) | English request and six JSON offers; LangGraph extraction followed by selection, two model calls | `./demo02/run_experiment.sh "Demo02 baseline"` |
+
+Both publish to Langfuse by default and use `OCI_MODEL` from `.env`. Add `--split all` to evaluate all 100 cases, or keep the default 80-case evaluation split. Demo02 shows live OK/KO counts and logs KO case IDs at the end. Each result records the model in its metadata. New demos have their own folder, adapter and launcher; the original Demo01 file locations are preserved.
 
 ## Tools used
 
@@ -109,6 +118,7 @@ The current contract supports **binary correctness scoring**, local JSON dataset
 | JSON datasets and manifests | Inspectable test cases, expected outcomes, and provenance |
 | pytest | Offline correctness, coverage, and cross-task integration tests |
 | tqdm and initialization logs | Experiment progress and visibility into preparation steps |
+| LangGraph | Demo02's sequential request-extraction and offer-selection agent |
 
 ## Try the current demo
 
@@ -157,7 +167,7 @@ Results are written to `data/runs/<run-id>/` as `metadata.json`, `results.jsonl`
 
 ## Evidence and current scope
 
-As of **2026-11-08**, **56 automated tests pass**, including cross-task execution with mocked OCI and Langfuse clients. A one-case live integration test before the reusable-task refactor verified OCI IAM inference, a correct decision, and persisted Langfuse scores. The refactor has been verified offline.
+As of **2026-11-09**, **105 automated tests pass**, including cross-task execution, lossless Demo02 request conversion, the graded-difficulty Demo02 v2 dataset, the two-step LangGraph agent, compact evaluation progress and mocked Langfuse publication. A one-case live Demo02 development run verified OCI IAM inference, a correct selection, persisted Langfuse scores and model metadata, and two remotely confirmed generation traces. See the [Demo02 agent guide](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) for its execution and verification scope.
 
 This repository is an exploration of the evaluation method, supported by a concrete implementation. It does not claim a full-agent performance benchmark. Extending the evidence to a complete agent would require evaluating its other responsibilities and interactions, using representative cases and agreed acceptance criteria.
 
@@ -167,6 +177,8 @@ This repository is an exploration of the evaluation method, supported by a concr
 * [Running and interpreting experiments](https://github.com/luigisaetta/agent-evals/blob/main/docs/evaluation.md)
 * [Adapting the pipeline to another task](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md)
 * [Synthetic dataset and generation](https://github.com/luigisaetta/agent-evals/blob/main/data/datasets/README.md)
+* [Demo02: English delivery requests with unchanged JSON offers](https://github.com/luigisaetta/agent-evals/blob/main/docs/demo02-dataset.md)
+* [Demo02: the two-step LangGraph agent](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md)
 * [Reference catalogs](https://github.com/luigisaetta/agent-evals/blob/main/data/catalogs/README.md)
 * [Reusable evaluation specification](https://github.com/luigisaetta/agent-evals/blob/main/specs/reusable-evaluation.md)
 * [Changelog](https://github.com/luigisaetta/agent-evals/blob/main/CHANGELOG.md)

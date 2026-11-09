@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-09
 License: MIT
 Description: Define and load the small adaptation contract for evaluation tasks.
 """
@@ -29,6 +29,11 @@ class EvaluationTask:
             invalid model output and return a JSON-compatible value otherwise.
         score_output: Compare parsed output to the reference and return 0 or 1.
         version: Version of the task's prompt, validation and evaluator behavior.
+        create_invoker: Optional factory accepting client, settings, rules
+            and tracking keywords. Its callable owns multi-call pacing/tracing
+            and returns a Responses envelope, optionally with execution_error.
+        source_files: Extra repository-relative implementation/prompt artifacts
+            whose contents must be hashed into run metadata.
     """
 
     name: str
@@ -43,6 +48,8 @@ class EvaluationTask:
     parse_output: Callable[[str, Any], Any]
     score_output: Callable[[Any, Any], int]
     version: str = "1.0"
+    create_invoker: Callable | None = None
+    source_files: tuple[Path, ...] = ()
 
 
 def load_task(module_name: str) -> EvaluationTask:
@@ -74,4 +81,6 @@ def load_task(module_name: str) -> EvaluationTask:
         task.validate_case, task.build_instructions, task.parse_output, task.score_output,
     )):
         raise ValueError("Task callbacks must be callable")
+    if task.create_invoker is not None and not callable(task.create_invoker):
+        raise ValueError("Task invoker factory must be callable")
     return task

@@ -1,5 +1,13 @@
 # Express Order synthetic dataset
 
+## Dataset variants
+
+The original `express-order-v1.json` uses structured request/offer inputs. [demo02-express-order-v1.json](https://github.com/luigisaetta/agent-evals/blob/main/data/datasets/demo02-express-order-v1.json) replaces only `input.request` with varied English delivery-request text, while `input.offers` remains the exact same six structured JSON offers and reference answers stay unchanged. See the [Demo02 data guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/demo02-dataset.md) for provenance and the [Demo02 LangGraph agent](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md) for single-case execution and full-dataset evaluation with Langfuse publication.
+
+[demo02-express-order-v2.json](demo02-express-order-v2.json) derives three paired records (L0, L1, L2) from each source case, so that request extraction requires interpretation: inclusive and relative deadlines, non-canonical part numbers, and distractor parts, cities and dates. Offers and `expected_offer_id` are unchanged, and `expected_output.expected_request` adds the reference extraction. See the [Demo02 data guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/demo02-dataset.md#version-2-graded-extraction-difficulty).
+
+## Original structured dataset
+
 [express-order-v1.json](express-order-v1.json) contains 100 cases, each with six offers and one unique expected winner under rules version 1.1. [The manifest](express-order-v1.manifest.json) records provenance hashes and coverage counts.
 
 All data is synthetic and generated from the reference catalogs, using seed 42 and fixed date origin 2027-01-01. Each of the 100 parts is requested once, each of the 10 plant cities is requested ten times, and all 50 suppliers appear. Some cases include multiple offers from the same supplier. Costs are illustrative total offer amounts in euros, not market quotations.

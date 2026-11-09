@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-09
 License: MIT
 Description: Adapt the reusable evaluation runner to Automotive Express Order.
 """
@@ -11,41 +11,60 @@ from pathlib import Path
 from agent_evals.task import EvaluationTask
 
 
+def validate_offers(offers: list[dict]) -> None:
+    """Validate the shared six-offer contract without requiring a request or label.
+
+    Args:
+        offers: Candidate supplier offers.
+
+    Raises:
+        ValueError: If offer shape, required fields or identifiers are invalid.
+    """
+    required = {"offer_id", "supplier_id", "part_id", "delivery_location",
+                "delivery_date", "total_cost_eur"}
+    if not isinstance(offers, list) or len(offers) != 6:
+        raise ValueError("Exactly six structured offers are required")
+    if any(not isinstance(offer, dict) or not required.issubset(offer) for offer in offers):
+        raise ValueError("Invalid offer fields")
+    identifiers = [offer["offer_id"] for offer in offers]
+    if (any(not isinstance(value, str) or not value.strip() for value in identifiers)
+            or len(set(identifiers)) != len(identifiers)):
+        raise ValueError("Offer identifiers must be unique non-empty strings")
+
+
+def validate_input(task_input: dict) -> None:
+    """Validate structured request and offers independently of reference answers.
+
+    Args:
+        task_input: Request object and six JSON offers.
+
+    Raises:
+        ValueError: If input shape or required request/offer fields are invalid.
+    """
+    if not isinstance(task_input, dict) or set(task_input) != {"request", "offers"}:
+        raise ValueError("Input must contain request and offers")
+    request = task_input["request"]
+    if (not isinstance(request, dict)
+            or not {"part_id", "delivery_location", "latest_delivery_date"}.issubset(request)):
+        raise ValueError("Invalid request fields")
+    validate_offers(task_input["offers"])
+
+
 def validate_case(case: dict) -> None:
-    """Validate the six-offer input and stored reference without relabeling it.
+    """Validate a six-offer case and stored reference without relabeling it.
 
     Args:
         case: Case with input, expected_output and an identifier.
 
     Raises:
-        ValueError: If domain fields, identifiers or the reference are invalid.
+        ValueError: If input or reference fields are invalid.
     """
-    case_id = case["id"]
-    if (not isinstance(case["input"], dict) or set(case["input"]) != {"request", "offers"}
-            or not isinstance(case["input"]["offers"], list)
-            or len(case["input"]["offers"]) != 6):
-        raise ValueError(f"Invalid six-offer task input: {case_id}")
-    request = case["input"]["request"]
-    if (not isinstance(request, dict)
-            or not {"part_id", "delivery_location", "latest_delivery_date"}.issubset(request)):
-        raise ValueError(f"Invalid request fields: {case_id}")
-    offers = case["input"]["offers"]
-    required_offer_fields = {"offer_id", "supplier_id", "part_id", "delivery_location",
-                             "delivery_date", "total_cost_eur"}
-    if not isinstance(offers, list) or any(
-        not isinstance(offer, dict) or not required_offer_fields.issubset(offer)
-        for offer in offers
-    ):
-        raise ValueError(f"Invalid offer fields: {case_id}")
-    identifiers_in_case = [offer["offer_id"] for offer in offers]
-    if (any(not isinstance(identifier, str) or not identifier.strip() for identifier in identifiers_in_case)
-            or len(set(identifiers_in_case)) != len(identifiers_in_case)):
-        raise ValueError(f"Offer identifiers must be unique non-empty strings: {case_id}")
+    validate_input(case["input"])
     expected = case["expected_output"]
     if (not isinstance(expected, dict) or set(expected) != {"expected_offer_id"}
             or not isinstance(expected["expected_offer_id"], str)
             or expected["expected_offer_id"] not in {o["offer_id"] for o in case["input"]["offers"]}):
-        raise ValueError(f"Invalid reference offer identifier: {case_id}")
+        raise ValueError(f"Invalid reference offer identifier: {case['id']}")
 
 
 def build_instructions(rules: str) -> str:

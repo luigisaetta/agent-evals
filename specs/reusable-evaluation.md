@@ -28,6 +28,11 @@ The Express Order adapter is `agent_evals.tasks.offer_selection` and exports `TA
 
 ## Verification and acceptance criteria
 
+The optional multi-step invoker factory, additional source artifacts, per-result
+model metadata and compact OK/KO progress are specified in
+[the Demo02 evaluation specification](https://github.com/luigisaetta/agent-evals/blob/main/demo02/evaluation-spec.md).
+Single-call adapters retain their existing defaults and file locations.
+
 * Existing Express Order labels, generator artifacts, OCI signing and sleep defaults, failure categories, scoring and Langfuse score names remain correct. CLI arguments continue working.
 * Run the Express Order dry run on all 100 cases. All domain rules and fields are confined to its adapter and existing generation/oracle code.
 * Add a different small task in test fixtures, with text/classification inputs and outputs, a different metric, and a different rule-source key. Exercise the same dataset loader, engine, CLI module selection, provider request and mocked Langfuse path without altering core code.

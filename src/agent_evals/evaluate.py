@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-09
 License: MIT
 Description: Run reusable sequential OCI evaluations with task-specific adapters.
 """
@@ -70,6 +70,14 @@ def evaluate_case(case: dict, invoke, task: EvaluationTask) -> dict:
         result["error"] = describe_api_error(error)
     else:
         result.update(response)
+        if response.get("execution_error"):
+            error = response["execution_error"]
+            result["error"] = error
+            result["status"] = error["kind"] if error["kind"] in {
+                "api_error", "invalid_output",
+            } else "agent_error"
+            result["latency_seconds"] = round(time.perf_counter() - started, 6)
+            return result
         try:
             if response["response_status"] != "completed":
                 raise ValueError("Response did not complete")
@@ -119,7 +127,8 @@ def summarize(results: list[dict], selected_count: int) -> dict:
 
 
 def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
-              metadata: dict, task_definition: EvaluationTask, tracking=None, hosted_items=None) -> dict:
+              metadata: dict, task_definition: EvaluationTask, tracking=None, hosted_items=None,
+              compact_progress: bool = False) -> dict:
     """Execute sequentially, persist each result, and optionally track an experiment.
 
     Args:
@@ -131,6 +140,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
         task_definition: Domain-specific parsing, scoring and metric settings.
         tracking: Optional initialized Langfuse client.
         hosted_items: Uploaded Langfuse items corresponding to the cases.
+        compact_progress: Update OK/KO counters instead of printing each case.
 
     Returns:
         Summary including local metrics and publication submission state.
@@ -144,6 +154,9 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
     run_error = None
     experiment_url = None
     progress = tqdm(total=len(cases), desc="Evaluating cases", unit="case", dynamic_ncols=True)
+    ok_count = 0
+    if compact_progress:
+        progress.set_postfix(OK=0, KO=0)
 
     def task(*, item, **kwargs):
         """Execute one SDK or local item with pacing and durable output.
@@ -155,30 +168,41 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
         Returns:
             Scored case result for the Langfuse evaluator.
         """
+        nonlocal ok_count, publication, run_error
         case = by_id[item.metadata["case_id"]] if tracking else item
-        if results:
+        if results and task_definition.create_invoker is None:
             time.sleep(sleep_seconds)
         observation = tracking.start_as_current_observation(
             name=f"oci-{task_definition.name}", as_type="generation", model=metadata["model"],
             input={"instructions": metadata["instructions"], "input": case["input"]},
             model_parameters={"max_output_tokens": metadata["max_output_tokens"]},
-        ) if tracking else nullcontext()
+        ) if tracking and task_definition.create_invoker is None else nullcontext()
         with observation as generation:
             result = evaluate_case(case, invoke, task_definition)
+            result["metadata"] = result["metadata"] | {
+                "model": metadata.get("model"), "task_name": task_definition.name,
+            }
             # Save locally before any trace update that could fail.
             with (output_dir / "results.jsonl").open("a") as stream:
                 stream.write(json.dumps(result, ensure_ascii=False) + "\n")
             results.append(result)
+            if result.get("publication_errors"):
+                publication = "failed"
+                run_error = "LangfuseObservationError"
+            ok_count += int(result["status"] == "correct")
+            if compact_progress:
+                progress.set_postfix(OK=ok_count, KO=len(results) - ok_count, refresh=False)
             progress.update(1)
             http_status = (result["error"] or {}).get("http_status")
             detail = f" (HTTP {http_status})" if http_status else ""
             if result["status"] == "api_error" and not http_status:
-                detail = f" ({result['error']['type']}: {result['error']['reason']})"
-            tqdm.write(f"[{len(results)}/{len(cases)}] {case['id']}: {result['status']}{detail}")
+                detail = f" ({result['error'].get('type', 'APIError')}: {result['error'].get('reason', 'Request failed')})"
+            if not compact_progress:
+                tqdm.write(f"[{len(results)}/{len(cases)}] {case['id']}: {result['status']}{detail}")
             if generation:
                 generation.update(
                     output=result["raw_output"], usage_details=result["usage"],
-                    level="ERROR" if result["status"] in {"api_error", "invalid_output", "evaluator_error"} else "DEFAULT",
+                    level="ERROR" if result["status"] in {"api_error", "invalid_output", "evaluator_error", "agent_error"} else "DEFAULT",
                     status_message=result["status"],
                 )
         return result
@@ -203,7 +227,8 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
                 run_error = "LangfuseExperimentItemError"
                 publication = "failed"
             else:
-                publication = "submitted_unverified"
+                if publication != "failed":
+                    publication = "submitted_unverified"
         else:
             for case in cases:
                 task(item=case)
@@ -226,8 +251,19 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             "run_error": run_error, "experiment_url": experiment_url,
             "result_schema_version": 2, "task_name": task_definition.name,
             "task_version": task_definition.version, "metric_name": task_definition.metric_name,
+            "model": metadata.get("model"), "ok_count": ok_count,
+            "ko_count": len(results) - ok_count,
+            "ko_cases": [{"case_id": r["case_id"], "status": r["status"], "error": r["error"]}
+                         for r in results if r["status"] != "correct"],
         }
         (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        if compact_progress:
+            print(f"Completed: OK={ok_count} KO={len(results) - ok_count}")
+            print("KO case IDs:" if summary["ko_cases"] else "KO case IDs: none")
+            for failure in summary["ko_cases"]:
+                stage = (failure["error"] or {}).get("stage")
+                detail = f", stage={stage}" if stage else ""
+                print(f"  {failure['case_id']}: {failure['status']}{detail}")
     return summary
 
 
@@ -258,6 +294,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", type=Path, default=ROOT / "data/runs")
     parser.add_argument("--no-langfuse", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--compact-progress", action="store_true",
+                        help="Show live OK/KO counts and log KO IDs only at the end.")
     args = parser.parse_args(argv)
     if not args.experiment_name.strip():
         parser.error("--experiment-name must not be blank")
@@ -294,7 +332,11 @@ def main(argv: list[str] | None = None) -> int:
                 "code_sha256": {str(p.relative_to(Path(__file__).parent)): file_hash(p)
                                 for p in Path(__file__).parent.rglob("*.py")},
                 "task_source_sha256": task_source_hashes(task_definition),
+                "task_artifact_sha256": {str(p): file_hash(ROOT / p)
+                                         for p in task_definition.source_files},
             }
+            if task_definition.create_invoker is not None:
+                metadata["sdk_versions"]["langgraph"] = version("langgraph")
         # Build the signing client before publishing any dataset records.
         with initialization_step(4, "Initialize OCI IAM signing client"):
             client = create_client(settings)
@@ -308,18 +350,27 @@ def main(argv: list[str] | None = None) -> int:
                     manifest["dataset_version"], manifest["rules_version"],
                 )
                 metadata["dataset_name"] = name
-            print(f"[{9 if tracking else 5}] Initialization complete; starting evaluation ... OK", flush=True)
+            next_step = 9 if tracking else 5
+            if task_definition.create_invoker:
+                with initialization_step(next_step, "Prepare agent execution pipeline"):
+                    invoke = task_definition.create_invoker(
+                        client=client, settings=settings, rules=rules, tracking=tracking,
+                    )
+                next_step += 1
+            else:
+                invoke = lambda task: invoke_model(client, settings, instructions, task)
+            print(f"[{next_step}] Initialization complete; starting evaluation ... OK", flush=True)
             summary = run_cases(
-                cases, lambda task: invoke_model(client, settings, instructions, task),
+                cases, invoke,
                 settings.sleep_seconds, args.output_dir / run_id, metadata,
-                task_definition, tracking, items,
+                task_definition, tracking, items, args.compact_progress,
             )
         print(json.dumps(summary, indent=2))
         print(f"Local results: {args.output_dir / run_id}")
         if summary["run_error"] or summary["publication"] == "failed":
             return 1
         return 2 if any(summary["status_counts"].get(s, 0)
-                        for s in ("api_error", "invalid_output", "evaluator_error")) else 0
+                        for s in ("api_error", "invalid_output", "evaluator_error", "agent_error")) else 0
     except ConfigurationError as error:
         print(f"Evaluation setup failed: {error}")
         return 1

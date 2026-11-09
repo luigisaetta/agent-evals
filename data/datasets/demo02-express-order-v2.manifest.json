@@ -1,0 +1,62 @@
+{
+  "dataset_name": "demo02-express-order-v2",
+  "dataset_version": "2.0",
+  "rules_version": "1.1",
+  "input_format": "natural_language_request_structured_offers",
+  "generation_seed": 42,
+  "case_count": 300,
+  "source_case_count": 100,
+  "offers_per_case": 6,
+  "dataset_sha256": "33dcebb1b1c8be0c5fba2d0ffe3eedf7f40e5d5cc1784e648d6e5428abdda042",
+  "source_sha256": {
+    "datasets/express-order-v1.json": "1ed5c0b7145f7d5858e9e9d4c26a2e6803ff987051ecb968e5716921ec4cbff7",
+    "datasets/express-order-v1.manifest.json": "6823d6262e02181e6a08545b931d39c1612626ee86c568dd68394dc3aa496865",
+    "rules/offer-selection.md": "74103a81bebe161271873e8f23ba186f844509981340dbdd72a849038daa35a4",
+    "catalogs/parts.json": "158ffedaf5190c6ccd76ecd14d14f8cc2cad19b074bb6dff5483332742d97a90",
+    "catalogs/locations.json": "de5ca07dd5060486b8498784cc6118f51f7aeda13d914e626683ca20b4d2a791",
+    "code/generate_demo02_dataset.py": "d9ca5106ce9d5214c548bb21142bc8efbc350d08d7fb6a12ae32aedaeef72df1",
+    "code/generate_demo02_v2_dataset.py": "07a950b8a4081b600dbffceec794f9c50275207b1789494e44bce4054758599f"
+  },
+  "level_counts": {
+    "L0": 100,
+    "L1": 100,
+    "L2": 100
+  },
+  "split_counts": {
+    "development": 60,
+    "evaluation": 240
+  },
+  "scenario_counts": {
+    "all_eligible": 30,
+    "cost_before_speed": 30,
+    "deadline_day_cheaper": 30,
+    "late_cheaper": 30,
+    "mixed_filters_single_eligible": 30,
+    "one_cent_margin": 30,
+    "three_way_cost_tie": 30,
+    "two_way_cost_tie": 30,
+    "wrong_city_cheaper": 30,
+    "wrong_part_cheaper": 30
+  },
+  "deadline_form_counts": {
+    "L0:exclusive": 100,
+    "L1:inclusive": 50,
+    "L1:relative_days": 50,
+    "L2:business_days": 25,
+    "L2:days_before_event": 25,
+    "L2:moved_deadline": 20,
+    "L2:relative_weeks": 30
+  },
+  "part_form_counts": {
+    "L0:canonical": 100,
+    "L1:compact": 25,
+    "L1:p_n": 18,
+    "L1:part_no": 35,
+    "L1:part_number": 22,
+    "L2:canonical": 13,
+    "L2:compact": 26,
+    "L2:p_n": 19,
+    "L2:part_no": 18,
+    "L2:part_number": 24
+  }
+}

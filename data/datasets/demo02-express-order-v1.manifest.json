@@ -1,0 +1,49 @@
+{
+  "dataset_name": "demo02-express-order-v1",
+  "dataset_version": "1.0",
+  "rules_version": "1.1",
+  "input_format": "natural_language_request_structured_offers",
+  "transformation_seed": 42,
+  "case_count": 100,
+  "offers_per_case": 6,
+  "dataset_sha256": "aefaa404e2ebb230e2f68789b16d0b53ca99255cbae5101d4dd628fe49b2204e",
+  "source_sha256": {
+    "datasets/express-order-v1.json": "1ed5c0b7145f7d5858e9e9d4c26a2e6803ff987051ecb968e5716921ec4cbff7",
+    "datasets/express-order-v1.manifest.json": "6823d6262e02181e6a08545b931d39c1612626ee86c568dd68394dc3aa496865",
+    "rules/offer-selection.md": "74103a81bebe161271873e8f23ba186f844509981340dbdd72a849038daa35a4",
+    "code/generate_demo02_dataset.py": "d9ca5106ce9d5214c548bb21142bc8efbc350d08d7fb6a12ae32aedaeef72df1"
+  },
+  "scenario_counts": {
+    "all_eligible": 10,
+    "cost_before_speed": 10,
+    "deadline_day_cheaper": 10,
+    "late_cheaper": 10,
+    "mixed_filters_single_eligible": 10,
+    "one_cent_margin": 10,
+    "three_way_cost_tie": 10,
+    "two_way_cost_tie": 10,
+    "wrong_city_cheaper": 10,
+    "wrong_part_cheaper": 10
+  },
+  "split_counts": {
+    "development": 20,
+    "evaluation": 80
+  },
+  "request_template_counts": {
+    "request-01": 10,
+    "request-02": 10,
+    "request-03": 10,
+    "request-04": 10,
+    "request-05": 10,
+    "request-06": 10,
+    "request-07": 10,
+    "request-08": 10,
+    "request-09": 10,
+    "request-10": 10
+  },
+  "request_date_style_counts": {
+    "day_month_year": 29,
+    "iso": 34,
+    "month_day_year": 37
+  }
+}

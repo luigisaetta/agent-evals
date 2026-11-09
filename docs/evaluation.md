@@ -27,7 +27,12 @@ Configure your ignored `.env`; [.env.example](../.env.example) lists safe placeh
 
 OCI access uses `OciUserPrincipalAuth` from Oracle's `oci-genai-auth` package. The SDK's `api_key="not-used"` is a placeholder, not a service API key. Region and model come from the environment; there is no automatic provider/model fallback. The project and IAM permissions must allow Responses calls for that model in that region. See the [OCI setup and signing examples](https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm).
 
-The project uses OpenAI SDK 2.x with HTTPX 0.28.1 to match the Oracle auth helper's HTTPX integration. Langfuse is pinned to SDK 5.2.0, whose experiment API was checked against the installed package. No LangChain or additional agent framework is required.
+The project uses OpenAI SDK 2.x with HTTPX 0.28.1 to match the Oracle auth helper's HTTPX integration. Langfuse is pinned to SDK 5.2.0, whose experiment API was checked against the installed package. Demo01 calls Responses directly; Demo02 orchestrates two direct Responses calls with LangGraph. Both use the same OCI transport.
+
+This guide describes the shared runner and Demo01 defaults. For NL requests and
+the two-step agent, use the dedicated
+[Demo02 evaluation guide](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md)
+and `./demo02/run_experiment.sh "Demo02 baseline" --split all`.
 
 ## Commands
 
@@ -84,13 +89,13 @@ Calls are sequential, with no pause before the first call or after the last. The
 
 ## Results and scoring
 
-A `tqdm` progress bar shows completed attempts out of the selected case count for both local-only and Langfuse runs. It advances after each result is saved, including API errors and invalid outputs. Per-case status messages remain visible, and the bar closes on completion or failure.
+A `tqdm` progress bar shows completed attempts out of the selected case count for both local-only and Langfuse runs. It advances after each result is saved, including API errors and invalid outputs. Demo01 retains per-case status messages. `--compact-progress` instead updates OK/KO counts and logs KO IDs at the end; this is the Demo02 wrapper's default. The bar closes on completion or failure.
 
 Each run has a unique directory under ignored `data/runs/`:
 
 * `metadata.json`: run identifier/name, task module/name/version, metric name, result schema version, model, region, split, limits, prompt/rules/dataset/code hashes, task callback source hashes, instructions, and SDK versions. The required experiment name is recorded separately, and a unique suffix is appended to run names to avoid merging repeated experiments.
-* `results.jsonl`: one record per attempted case, written immediately. Includes generic `expected_output`, parsed `output`, `output_valid`, raw output, token usage when returned, latency, execution status, and score or safe error classification.
-* `summary.json`: result schema version, task identity, metric name, attempt counts, unattempted count, valid-score denominator, status counts, `accuracy`, overall success rate, run errors, publication state, and experiment URL when available.
+* `results.jsonl`: one record per attempted case, written immediately. Includes generic `expected_output`, parsed `output`, `output_valid`, raw output, token usage when returned, latency, execution status, and score or safe error classification. Each result's metadata includes the configured `model` and `task_name`.
+* `summary.json`: result schema version, task identity, metric name, model, attempt counts, unattempted count, valid-score denominator, status counts, `accuracy`, overall success rate, OK/KO counts and KO case details, run errors, publication state, and experiment URL when available.
 
 New runs use result schema version 2. For Express Order, the chosen ID is now `output.selected_offer_id`, and the reference is `expected_output.expected_offer_id`. `accuracy` replaces `selection_accuracy` in summaries. Older run files remain unchanged; see [the migration table](adapting-tasks.md#result-schema-version-2).
 
@@ -99,6 +104,10 @@ New runs use result schema version 2. For Express Order, the chosen ID is now `o
 Accuracy is correct answers divided by valid scored cases. Overall success rate is correct answers divided by all attempted cases. Always inspect failure and unattempted counts alongside these rates. Accuracy is null if there are no valid scored outputs. Unexpected task parser/scorer errors use `evaluator_error`, have no correctness score, and are counted separately from model and API failures. No experiment-level pass threshold is currently defined.
 
 Exit codes: 0 means the run completed (including valid but incorrect answers); 1 means setup, incomplete experiment, or publication failure; 2 means at least one invalid output, evaluator error, or API error occurred. A dry run produces no model accuracy or experiment records.
+
+Multi-step adapters also distinguish `agent_error` for internal pipeline failures;
+these are KO, unscored, and produce exit code 2. Demo02 saves its extracted
+request and attempted-step records alongside the common result fields.
 
 ## Langfuse behavior
 
@@ -117,3 +126,9 @@ python -m pytest -q
 Unit tests use mocked clients and make no OCI or Langfuse calls. A live smoke run is a separate integration check; its result does not establish accuracy over the full dataset.
 
 On 2026-11-08, all 56 automated tests passed, including the shared pipeline's use with an independent classification fixture and mocked Langfuse publication. Before the reusable-task refactor, a one-case development smoke test successfully invoked OCI Responses using IAM signing and selected the expected offer. Its dataset item, experiment, and scores (`valid_output=1`, `selection_correct=1`, `execution_status=correct`) were independently confirmed through the Langfuse read API. The refactor has been verified offline; no new live run or full-dataset accuracy measurement is claimed for it.
+
+On 2026-11-09, all 89 tests passed, including Demo02's shared-runner integration.
+A live one-case Demo02 development run produced the expected selection. Langfuse
+read API checks independently confirmed its experiment item, model metadata,
+three scores and two generation observations. This is an integration smoke test,
+not a full-dataset accuracy measurement.

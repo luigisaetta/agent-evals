@@ -142,3 +142,64 @@ Summaries and run metadata include `result_schema_version`, task identity/versio
 Langfuse retains `selection_correct` for Express Order. Another task supplies its own correctness metric; all tasks share `valid_output` and `execution_status`. Hosted Express Order dataset names and stable item IDs retain their existing namespace.
 
 This initial reusable contract supports **binary correctness**, JSON datasets, and rules-based prompts on OCI Responses. Fractional scores, multiple domain metrics, alternative providers, and generalized dataset generation require explicit future extensions.
+
+## Organizing multiple demos
+
+Keep the original Demo01 files in their existing locations. Each additional demo
+gets a dedicated top-level package and launcher, following
+[Demo02](https://github.com/luigisaetta/agent-evals/blob/main/demo02/README.md):
+
+```text
+src/agent_evals/          Shared configuration, transport, runner and publication
+demo02/                  Agent, prompts, adapter, CLI, specs and README
+  evaluation.py          Exports this demo's TASK
+  evaluate.py            Small wrapper selecting TASK and compact progress
+  run_experiment.sh      Conda launcher with a required experiment name
+demo03/                  Future demo, following the same convention
+data/datasets/           Versioned datasets and manifests
+data/runs/               Ignored results with task/model identity
+```
+
+New adapters use distinct task names and Langfuse dataset namespaces. Reuse the
+shared CLI rather than copying its startup, dataset upload, scoring or result
+storage code. A new launcher adds both the root and `src` to `PYTHONPATH`; see
+[the Demo02 launcher](https://github.com/luigisaetta/agent-evals/blob/main/demo02/run_experiment.sh).
+The root launcher continues to select Demo01 by default.
+
+### Multi-step agent execution
+
+For one-call tasks, the original four callbacks remain sufficient. A multi-step
+adapter can additionally supply `create_invoker` and `source_files` in its
+`EvaluationTask`. The
+[Demo02 adapter](https://github.com/luigisaetta/agent-evals/blob/main/demo02/evaluation.py)
+is a concrete example.
+
+`create_invoker(*, client, settings, rules, tracking)` is called once after
+service initialization. It builds the agent and returns `invoke(task_input)`.
+Only task input reaches this callable; expected outputs stay in the evaluator.
+The callable owns pacing between all actual model calls, including across
+cases, and creates any per-node Langfuse observations. The shared runner disables
+its own pause and outer generation for such adapters to avoid double delays or
+misrepresenting a multi-call pipeline as a single generation.
+
+Return `raw_output`, `response_status`, `response_id`, and `usage`, as with the
+shared Responses transport. Additional JSON-compatible fields such as `steps`
+and `extracted_request` are preserved. An optional safe `execution_error`
+contains `stage` and `kind`; `api_error` and `invalid_output` retain those
+statuses, while other pipeline failure kinds become `agent_error`. Such results
+are unscored. Unexpected parser/scorer failures remain `evaluator_error`.
+
+Optional `publication_errors` contains safe exception class names for tracing
+failures. Preserve successful agent results and let the shared runner mark
+publication as failed. Do not copy raw SDK exception messages into artifacts.
+
+`source_files` lists repository-relative implementation and prompt paths for
+hashing in `metadata.json`; include all files involved in execution and both
+prompts. Each result's metadata and the summary record `model`. The experiment
+metadata and generation model fields record it as well.
+
+Use `--compact-progress` to show live OK/KO counts and print only KO case IDs
+after execution. Demo02 enables it through its wrapper; Demo01 retains its
+existing default console behavior. Shared summary files contain `ok_count`,
+`ko_count`, and `ko_cases` for either display mode. OK is exact correctness;
+all other attempted statuses are KO, with unattempted cases separate.
