@@ -62,7 +62,7 @@ The runner publishes a task-specific correctness metric alongside shared `valid_
 
 Dataset item identifiers are stable across repeated uploads. Each execution has a unique run identifier and records task, model, dataset, rules, prompt, and code provenance. Calls are sequential, with a configurable pause between invocations.
 
-The initial destination is Langfuse Cloud. Its URL and keys are configurable for a future self-hosted instance on OCI. See the [detailed guide to evals and Langfuse](https://github.com/luigisaetta/agent-evals/blob/main/docs/evals-for-agentic-solutions.md) for the full workflow and how to interpret the results.
+The initial destination is Langfuse Cloud. Its URL and keys are configurable for a future self-hosted instance on OCI; see [using a self-hosted Langfuse instance](https://github.com/luigisaetta/agent-evals/blob/main/docs/langfuse-self-hosted.md) for the server version it requires. See the [detailed guide to evals and Langfuse](https://github.com/luigisaetta/agent-evals/blob/main/docs/evals-for-agentic-solutions.md) for the full workflow and how to interpret the results.
 
 ## A concrete example: Automotive Express Order
 
@@ -177,6 +177,7 @@ This repository is an exploration of the evaluation method, supported by a concr
 
 * [Evals for agentic solutions: motivation, implementation, synthetic data, and Langfuse](https://github.com/luigisaetta/agent-evals/blob/main/docs/evals-for-agentic-solutions.md)
 * [Running and interpreting experiments](https://github.com/luigisaetta/agent-evals/blob/main/docs/evaluation.md)
+* [Using a self-hosted Langfuse instance](https://github.com/luigisaetta/agent-evals/blob/main/docs/langfuse-self-hosted.md)
 * [Adapting the pipeline to another task](https://github.com/luigisaetta/agent-evals/blob/main/docs/adapting-tasks.md)
 * [Synthetic dataset and generation](https://github.com/luigisaetta/agent-evals/blob/main/data/datasets/README.md)
 * [Demo02: English delivery requests with unchanged JSON offers](https://github.com/luigisaetta/agent-evals/blob/main/docs/demo02-dataset.md)

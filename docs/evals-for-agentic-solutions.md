@@ -305,6 +305,8 @@ The initial deployment target is Langfuse Cloud. The application configures the 
 
 Deploying that instance or migrating historical project data is separate work. A configurable URL is useful preparation, not an implemented historical-data migration procedure.
 
+The features used here are part of the open-source self-hosted edition, but the pinned Python SDK v5 requires self-hosted Langfuse v4.59.0 or later. The [self-hosted Langfuse note](https://github.com/luigisaetta/agent-evals/blob/main/docs/langfuse-self-hosted.md) lists the requirements and a verification sequence.
+
 ## 9. Extending the demo: a two-step agent
 
 Demo01 hands the model a structured request. A real agent usually receives text: an email or a message from a plant. Demo02 keeps the same offers, rules and expected answers, but replaces the structured request with an English request and asks a two-step agent to solve it.

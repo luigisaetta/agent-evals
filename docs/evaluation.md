@@ -21,7 +21,7 @@ Configure your ignored `.env`; [.env.example](../.env.example) lists safe placeh
 | `OCI_TIMEOUT_SECONDS` | `120` | Per-request timeout |
 | `OCI_MAX_OUTPUT_TOKENS` | `2048` | Maximum output tokens, including any model reasoning |
 | `EVAL_SLEEP_SECONDS` | `2` | Full pause between consecutive invocations |
-| `LANGFUSE_BASE_URL` | Required with Langfuse | Your Cloud region or self-hosted URL |
+| `LANGFUSE_BASE_URL` | Required with Langfuse | Your Cloud region or self-hosted URL (self-hosted Langfuse v4.59.0 or later; see [self-hosted Langfuse](langfuse-self-hosted.md)) |
 | `LANGFUSE_PUBLIC_KEY` | Required with Langfuse | Langfuse project public key |
 | `LANGFUSE_SECRET_KEY` | Required with Langfuse | Langfuse project secret key |
 
