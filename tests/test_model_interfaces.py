@@ -238,9 +238,18 @@ def test_provider_errors_are_never_repaired_or_retried(
     assert "PRIVATE_PROVIDER_MESSAGE" not in json.dumps(safe)
 
 
-def test_meta_registry_entry_maps_to_native_generic_chat(settings, native_client):
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        "meta.llama-3.3-70b-instruct",
+        "meta.llama-4-scout-17b-16e-instruct",
+    ],
+)
+def test_meta_registry_entry_maps_to_native_generic_chat(
+    settings, native_client, model_id
+):
     """Verify the registered Meta model with the real generic request/response mapping."""
-    settings = replace(settings, model="meta.llama-4-scout-17b-16e-instruct")
+    settings = replace(settings, model=model_id)
     message = SimpleNamespace(content=[SimpleNamespace(text="{}")], tool_calls=None)
     native_client[0].chat.return_value = SimpleNamespace(
         data=SimpleNamespace(
@@ -257,6 +266,7 @@ def test_meta_registry_entry_maps_to_native_generic_chat(settings, native_client
     with oci_model.create_client(settings) as adapter:
         result = adapter.invoke("instructions", {"request": "task data"})
     request = native_client[0].chat.call_args.args[0]
+    assert request.serving_mode.model_id == model_id
     assert request.chat_request.api_format == "GENERIC"
     assert request.chat_request.messages[0].role == "SYSTEM"
     assert request.chat_request.max_tokens == settings.max_output_tokens

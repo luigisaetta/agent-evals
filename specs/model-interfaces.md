@@ -42,6 +42,7 @@ the local registry does not claim live regional availability.
 | `google.gemini-2.5-pro`, `google.gemini-2.5-flash`, `google.gemini-2.5-flash-lite` | `responses` | Oracle supported agentic models |
 | `cohere.command-a-03-2025` | `langchain_oci` | Oracle Command A model page and installed Cohere provider |
 | `meta.llama-4-scout-17b-16e-instruct` | `langchain_oci` | Oracle LangChain setup example and installed Meta provider |
+| `meta.llama-3.3-70b-instruct` | `langchain_oci` | Oracle Llama 3.3 model page and installed Meta provider; same native generic-chat mapping tested offline |
 
 Cohere Command A Reasoning is deliberately not registered: Oracle requires Chat
 V2, but the installed 0.4.0 provider automatically selects V2 only for vision
@@ -92,6 +93,7 @@ safe error classification for OCI SDK exceptions without exposing their text.
 * [Oracle integration source](https://github.com/oracle/langchain-oracle)
 * [Cohere Command A](https://docs.oracle.com/en-us/iaas/Content/generative-ai/cohere-command-a-03-2025.htm)
 * [Cohere Command A Reasoning and V2](https://docs.oracle.com/en-us/iaas/Content/generative-ai/cohere-command-a-reasoning-08-2025.htm)
+* [Meta Llama 3.3 (70B)](https://docs.oracle.com/en-us/iaas/Content/generative-ai/meta-llama-3-3-70b.htm)
 
 ## Verification record (2026-11-10)
 

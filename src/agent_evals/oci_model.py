@@ -22,6 +22,7 @@ MODEL_INTERFACES = {
     "google.gemini-2.5-flash": ("google", {"responses"}),
     "google.gemini-2.5-flash-lite": ("google", {"responses"}),
     "cohere.command-a-03-2025": ("cohere", {"langchain_oci"}),
+    "meta.llama-3.3-70b-instruct": ("meta", {"langchain_oci"}),
     "meta.llama-4-scout-17b-16e-instruct": ("meta", {"langchain_oci"}),
 }
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+* 2026-11-10: Register `meta.llama-3.3-70b-instruct` for the shared `langchain_oci` interface used by both demos; verify its native generic-chat mapping offline alongside Llama 4 Scout.
 * 2026-11-10: Add a shared `.env` model-interface selector for Demo01 and Demo02: Responses remains the default, while pinned `langchain-oci` supports registered native chat models including Cohere Command A. Validate exact model/interface compatibility before publication, preserve prompts and pacing, disable hidden retries, normalize completion/usage/errors, and record the backend in local and Langfuse metadata. Add offline adapter and runner checks; live native-chat integration remains unverified.
 * 2026-11-09: Add a note on using a self-hosted Langfuse instance: the Langfuse features the project uses (all in the open-source edition), the self-hosted v4.59.0 minimum required by the pinned Python SDK v5, configuration and a verification sequence; link it from the README, the evals guide and the execution guide.
 * 2026-11-09: Extend the evals guide with Demo02: the two-step agent, the naive-baseline check, graded and paired difficulty levels, per-step scoring with `extraction_correct`, and the observed held-out results of gpt-oss-20b (two runs), gpt-oss-120b and gpt-6.1-terra; record the same live results in the Demo02 difficulty specification. Update the guide's score, launcher and adapter sections.
