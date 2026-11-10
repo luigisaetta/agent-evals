@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-10
 License: MIT
 Description: Load evaluation settings without exposing credentials.
 """
@@ -33,6 +33,9 @@ class Settings:
         sleep_seconds: Pause before each model call after the first.
         timeout_seconds: Timeout for each provider request.
         max_output_tokens: Maximum generated tokens per request.
+        model_interface: Explicit Responses or native LangChain OCI backend.
+        compartment_id: Compartment for native OCI chat requests.
+        model_name: Underlying model ID when model is a dedicated endpoint OCID.
     """
 
     region: str
@@ -43,6 +46,9 @@ class Settings:
     sleep_seconds: float
     timeout_seconds: float
     max_output_tokens: int
+    model_interface: str = "responses"
+    compartment_id: str = ""
+    model_name: str = ""
 
 
 def required_env(name: str) -> str:
@@ -90,10 +96,16 @@ def load_settings(env_file: Path, sleep_override: float | None = None) -> Settin
         raise ConfigurationError("Sleep seconds must be finite and non-negative")
     if not math.isfinite(timeout) or timeout <= 0 or max_tokens <= 0:
         raise ConfigurationError("Timeout and output token limit must be positive and finite")
+    interface = os.environ.get("OCI_MODEL_INTERFACE", "responses").strip()
+    if interface not in {"responses", "langchain_oci"}:
+        raise ConfigurationError("OCI_MODEL_INTERFACE must be responses or langchain_oci")
     return Settings(
         region=region, model=required_env("OCI_MODEL"),
-        project_id=required_env("OCI_PROJECT_ID"),
+        project_id=required_env("OCI_PROJECT_ID") if interface == "responses" else "",
         config_file=Path(os.environ.get("OCI_CONFIG_FILE", "~/.oci/config")).expanduser(),
         profile=os.environ.get("OCI_PROFILE", "DEFAULT"), sleep_seconds=sleep,
         timeout_seconds=timeout, max_output_tokens=max_tokens,
+        model_interface=interface,
+        compartment_id=required_env("OCI_COMPARTMENT_ID") if interface == "langchain_oci" else "",
+        model_name=os.environ.get("OCI_MODEL_NAME", "").strip(),
     )

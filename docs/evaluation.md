@@ -1,6 +1,6 @@
 # Running the offer-selection evaluation
 
-The runner invokes the selected model on OCI Generative AI through the Responses API. It authenticates using the private key referenced by your OCI config file and records results locally and, by default, in Langfuse Cloud. Expected answers are read from the dataset; the deterministic oracle is used during dataset generation and automated tests, without recomputing winners at evaluation startup. Express Order is the default task adapter. Use `--task` with another trusted module to reuse the same runner; see [the adaptation guide](adapting-tasks.md).
+The runner invokes the selected model on OCI Generative AI through Responses (the default) or native chat using `langchain_oci`. Both Demo01 and Demo02 use the same interface selection. It authenticates using the private key referenced by your OCI config file and records results locally and, by default, in Langfuse Cloud. Expected answers are read from the dataset; the deterministic oracle is used during dataset generation and automated tests, without recomputing winners at evaluation startup. Express Order is the default task adapter. Use `--task` with another trusted module to reuse the same runner; see [the adaptation guide](adapting-tasks.md).
 
 ## Setup
 
@@ -15,7 +15,10 @@ Configure your ignored `.env`; [.env.example](../.env.example) lists safe placeh
 | --- | --- | --- |
 | `OCI_REGION` | Required | Regional OCI inference endpoint |
 | `OCI_MODEL` | Required | Supported model ID or dedicated endpoint OCID |
-| `OCI_PROJECT_ID` | Required | Generative AI project OCID |
+| `OCI_MODEL_INTERFACE` | `responses` | `responses` or `langchain_oci`, shared by both demos |
+| `OCI_PROJECT_ID` | Required for `responses` | Generative AI project OCID |
+| `OCI_COMPARTMENT_ID` | Required for `langchain_oci` | Compartment OCID for native chat |
+| `OCI_MODEL_NAME` | Required for dedicated endpoints only | Underlying exact model ID used for compatibility checks |
 | `OCI_CONFIG_FILE` | `~/.oci/config` | OCI signing configuration |
 | `OCI_PROFILE` | `DEFAULT` | User-principal profile referencing your signing key |
 | `OCI_TIMEOUT_SECONDS` | `120` | Per-request timeout |
@@ -25,9 +28,37 @@ Configure your ignored `.env`; [.env.example](../.env.example) lists safe placeh
 | `LANGFUSE_PUBLIC_KEY` | Required with Langfuse | Langfuse project public key |
 | `LANGFUSE_SECRET_KEY` | Required with Langfuse | Langfuse project secret key |
 
-OCI access uses `OciUserPrincipalAuth` from Oracle's `oci-genai-auth` package. The SDK's `api_key="not-used"` is a placeholder, not a service API key. Region and model come from the environment; there is no automatic provider/model fallback. The project and IAM permissions must allow Responses calls for that model in that region. See the [OCI setup and signing examples](https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm).
+Responses uses `OciUserPrincipalAuth` from Oracle's `oci-genai-auth` package. The SDK's `api_key="not-used"` is a placeholder, not a service API key. Native chat uses the OCI SDK's user-principal signing with the same configuration file and profile. Region and model come from the environment; there is no automatic provider/model/interface fallback. IAM permissions and model availability must allow the selected API in that region. See the [OCI setup and signing examples](https://docs.oracle.com/en-us/iaas/Content/generative-ai/get-started-agents.htm).
 
-The project uses OpenAI SDK 2.x with HTTPX 0.28.1 to match the Oracle auth helper's HTTPX integration. Langfuse is pinned to SDK 5.2.0, whose experiment API was checked against the installed package. Demo01 calls Responses directly; Demo02 orchestrates two direct Responses calls with LangGraph. Both use the same OCI transport.
+The project uses OpenAI SDK 2.x with HTTPX 0.28.1 to match the Oracle auth helper's HTTPX integration. Native chat uses `langchain-oci==0.4.0`; Langfuse is pinned to SDK 5.2.0. Demo01 makes one model call; Demo02 orchestrates two with LangGraph. Both share the selected transport and retain their existing prompts, parsers, scoring and pacing.
+
+For example, select Cohere Command A for either demo:
+
+```dotenv
+OCI_MODEL_INTERFACE=langchain_oci
+OCI_MODEL=cohere.command-a-03-2025
+OCI_COMPARTMENT_ID=ocid1.compartment.oc1..your-compartment
+```
+
+Use the normal demo launchers after editing `.env`. To return to Responses, set
+`OCI_MODEL_INTERFACE=responses`, choose a registered Responses model, and provide
+`OCI_PROJECT_ID`. Leave `OCI_MODEL_NAME` unset for on-demand models; for dedicated
+endpoints set `OCI_MODEL` to the endpoint OCID and `OCI_MODEL_NAME` to its model ID.
+
+Startup checks the exact model against the small
+[verified compatibility registry](../specs/model-interfaces.md) before initializing
+OCI or publishing to Langfuse. Unregistered combinations fail with a configuration
+error. The registry is a supported project subset, not the entire OCI catalog;
+notably, Cohere Command A Reasoning requires V2 mapping work and is not registered.
+This local check does not test live permissions, regional availability or the
+identity actually hosted behind a dedicated endpoint. No startup generation probe
+is sent. Dataset-only `--dry-run` remains offline and does not load model settings.
+
+Native chat disables SDK and LangChain parameter-repair retries, streaming and
+caching. Output-token limits map to native `max_tokens`; no temperature is forced.
+Truncated or unknown finishes are rejected, and missing token usage stays absent.
+Run metadata records the interface, underlying model identity and relevant SDK
+versions; per-case results, summaries and Langfuse generations record the interface.
 
 This guide describes the shared runner and Demo01 defaults. For NL requests and
 the two-step agent, use the dedicated

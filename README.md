@@ -143,7 +143,7 @@ python -m pytest -q
 
 ### 2. Configure the services
 
-Create `.env` using [.env.example](https://github.com/luigisaetta/agent-evals/blob/main/.env.example) as a reference. Set `OCI_REGION`, `OCI_MODEL`, `OCI_PROJECT_ID`, and the Langfuse URL and keys. Configure an OCI signing profile in `~/.oci/config`; the default profile is `DEFAULT`.
+Create `.env` using [.env.example](https://github.com/luigisaetta/agent-evals/blob/main/.env.example) as a reference. Set `OCI_REGION`, `OCI_MODEL`, `OCI_PROJECT_ID`, and the Langfuse URL and keys. Configure an OCI signing profile in `~/.oci/config`; the default profile is `DEFAULT`. Both demos also support `OCI_MODEL_INTERFACE=langchain_oci` for registered native chat models such as Cohere Command A, using `OCI_COMPARTMENT_ID` instead of `OCI_PROJECT_ID`; see [model interface setup](docs/evaluation.md#setup).
 
 OCI inference uses the signing key referenced by that profile. Actual credentials and generated run outputs are excluded from Git. The [execution guide](https://github.com/luigisaetta/agent-evals/blob/main/docs/evaluation.md) covers the settings and access requirements.
 

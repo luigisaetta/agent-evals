@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-10
 License: MIT
 Description: Display the project banner and numbered initialization activities.
 """
@@ -18,7 +18,7 @@ def show_banner(task_title: str) -> None:
     lines = (
         "AGENT EVALS",
         task_title,
-        "OCI Generative AI | Responses API | Langfuse",
+        "OCI Generative AI | Model evaluation | Langfuse",
     )
     width = max(62, max(len(line) for line in lines) + 4)
     banner = ["", "╭" + "─" * width + "╮", "│" + " " * width + "│"]

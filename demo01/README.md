@@ -44,8 +44,11 @@ Set `OCI_REGION`, `OCI_MODEL`, `OCI_PROJECT_ID`, `LANGFUSE_BASE_URL`,
 signing key through `~/.oci/config`, profile `DEFAULT`, with optional
 `OCI_CONFIG_FILE` and `OCI_PROFILE` overrides. A provider API key is not used.
 
-The model and project must support your configured OCI Responses endpoint and
-permissions. Configuration is shared with other demos: changing `OCI_MODEL`
+The default interface is Responses. Set `OCI_MODEL_INTERFACE=langchain_oci` and
+`OCI_COMPARTMENT_ID` for registered native chat models such as Cohere Command A;
+see [shared configuration and compatibility](../docs/evaluation.md#setup).
+The model and IAM permissions must support the selected OCI interface.
+Configuration is shared with other demos: changing `OCI_MODEL`
 affects subsequent runs of both Demo01 and Demo02. Do not commit `.env` or keys.
 
 ## 2. Verify the setup offline

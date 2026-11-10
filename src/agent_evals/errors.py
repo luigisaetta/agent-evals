@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-10
 License: MIT
 Description: Classify API and transport failures without exposing sensitive details.
 """
@@ -9,6 +9,9 @@ import socket
 import ssl
 
 import httpx
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import SSLError as RequestsSSLError
+from requests.exceptions import Timeout as RequestsTimeout
 
 
 def describe_api_error(error: Exception) -> dict:
@@ -20,7 +23,7 @@ def describe_api_error(error: Exception) -> dict:
     Returns:
         Safe exception types, HTTP status and a readable failure category.
     """
-    status_code = getattr(error, "status_code", None)
+    status_code = getattr(error, "status_code", None) or getattr(error, "status", None)
     current = error
     seen = set()
     reason = None
@@ -31,6 +34,9 @@ def describe_api_error(error: Exception) -> dict:
         for exception_type, category in (
             (socket.gaierror, "DNS resolution failed"),
             (ssl.SSLError, "TLS certificate or handshake failed"),
+            (RequestsConnectionError, "Connection failed"),
+            (RequestsSSLError, "TLS certificate or handshake failed"),
+            (RequestsTimeout, "Request timed out"),
             (httpx.TimeoutException, "Request timed out"),
             (TimeoutError, "Request timed out"),
             (httpx.ProxyError, "Proxy connection failed"),

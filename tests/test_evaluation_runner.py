@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-08
+Date last modified: 2026-11-10
 License: MIT
 Description: Verify offline OCI evaluation, pacing and Langfuse publication mapping.
 """
@@ -35,7 +35,7 @@ def cases():
 @pytest.fixture
 def settings():
     """Return synthetic settings that never reference actual credentials."""
-    return Settings("us-chicago-1", "test-model", "test-project", Path("/tmp/test-oci-config"),
+    return Settings("us-chicago-1", "openai.gpt-oss-20b", "test-project", Path("/tmp/test-oci-config"),
                     "TEST", 2, 120, 2048)
 
 
@@ -65,7 +65,7 @@ def test_model_request_contains_only_task_input_and_rules(cases, settings):
     )
     result = oci_model.invoke_model(client, settings, "RULE TEXT", cases[0]["input"])
     args = client.responses.create.call_args.kwargs
-    assert args["model"] == "test-model" and args["store"] is False
+    assert args["model"] == settings.model and args["store"] is False
     assert json.loads(args["input"]) == cases[0]["input"]
     assert "RULE TEXT" in args["instructions"]
     assert args["instructions"] == "RULE TEXT"

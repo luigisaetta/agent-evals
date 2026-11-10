@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-09
+Date last modified: 2026-11-10
 License: MIT
 Description: Invoke the Demo02 LangGraph agent on one dataset input case.
 """
@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import sys
 
-from agent_evals.config import ROOT, load_settings
+from agent_evals.config import ConfigurationError, ROOT, load_settings
 from agent_evals.oci_model import create_client
 from demo02.agent import AgentExecutionError, OfferSelectionAgent
 from demo02.model import PacedResponses
@@ -65,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
         _save_details(args.details_file, {"error": error.error, "steps": error.steps})
         print(json.dumps({"error": error.error}), file=sys.stderr)
         return 2
+    except ConfigurationError as error:
+        print(f"Demo02 setup failed: {error}", file=sys.stderr)
+        return 1
     except Exception as error:
         # Do not print raw provider/configuration exceptions or credential paths.
         print(f"Demo02 setup failed ({type(error).__name__}). Check input and configuration.", file=sys.stderr)

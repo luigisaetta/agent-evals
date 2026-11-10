@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-09
+Date last modified: 2026-11-10
 License: MIT
 Description: Adapt the Demo02 graph to shared evaluation and per-step Langfuse tracing.
 """
@@ -70,7 +70,7 @@ def create_invoker(*, client, settings: Settings, rules: str, tracking=None):
     """Prepare one graph and paced transport for an entire sequential experiment.
 
     Args:
-        client: Initialized signed OCI Responses client.
+        client: Initialized client for the selected shared OCI interface.
         settings: Environment-derived model, pacing and request settings.
         rules: Shared natural-language selection rules.
         tracking: Optional Langfuse client; null disables external tracing.
@@ -99,7 +99,8 @@ def create_invoker(*, client, settings: Settings, rules: str, tracking=None):
             generation = stack.enter_context(tracking.start_as_current_observation(
                 name=f"demo02-{stage}", as_type="generation", model=settings.model,
                 input={"instructions": instructions, "input": payload},
-                metadata={"demo": "demo02", "stage": stage, "model": settings.model},
+                metadata={"demo": "demo02", "stage": stage, "model": settings.model,
+                          "model_interface": getattr(settings, "model_interface", "responses")},
                 model_parameters={"max_output_tokens": settings.max_output_tokens},
             ))
         except Exception as failure:
@@ -114,6 +115,7 @@ def create_invoker(*, client, settings: Settings, rules: str, tracking=None):
                         level="DEFAULT" if record["status"] == "completed" else "ERROR",
                         status_message=record["status"],
                         metadata={"demo": "demo02", "stage": stage, "model": settings.model,
+                                  "model_interface": getattr(settings, "model_interface", "responses"),
                                   "response_id": record.get("response_id"), "error": record.get("error")},
                     )
             except Exception as failure:
@@ -153,8 +155,9 @@ def create_invoker(*, client, settings: Settings, rules: str, tracking=None):
         return {
             "raw_output": raw_output, "response_status": "failed" if error else "completed",
             "response_id": steps[-1].get("response_id") if steps else None,
-            "usage": {key: sum(step.get("usage", {}).get(key, 0) for step in steps)
-                      for key in ("input", "output", "total")},
+            "usage": {key: sum(step["usage"][key] for step in steps)
+                      for key in ("input", "output", "total")
+                      if steps and all(key in step.get("usage", {}) for step in steps)},
             "steps": steps, "extracted_request": extracted, "execution_error": error,
             "publication_errors": list(publication_errors),
         }

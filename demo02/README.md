@@ -1,6 +1,6 @@
 # Demo02: a two-step LangGraph agent
 
-The agent receives an English delivery request and six structured supplier offers. It makes two sequential OCI Responses calls using the same model selected by `OCI_MODEL` in the root `.env`, and returns the same answer shape as Demo01:
+The agent receives an English delivery request and six structured supplier offers. It makes two sequential OCI model calls using the same model selected by `OCI_MODEL` in the root `.env`, and returns the same answer shape as Demo01. `OCI_MODEL_INTERFACE` selects Responses (default) or native chat through `langchain_oci` for both demos; see [shared configuration and compatibility](../docs/evaluation.md#setup).
 
 ```json
 {"selected_offer_id": "..."}

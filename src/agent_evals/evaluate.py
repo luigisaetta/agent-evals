@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-09
+Date last modified: 2026-11-10
 License: MIT
 Description: Run reusable sequential OCI evaluations with task-specific adapters.
 """
@@ -244,6 +244,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             name=f"oci-{task_definition.name}", as_type="generation", model=metadata["model"],
             input={"instructions": metadata["instructions"], "input": case["input"]},
             model_parameters={"max_output_tokens": metadata["max_output_tokens"]},
+            metadata={"model_interface": metadata.get("model_interface", "responses")},
         ) if tracking and task_definition.create_invoker is None else nullcontext()
         with observation as generation:
             result = evaluate_case(case, invoke, task_definition)
@@ -255,6 +256,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
                 result["trace_id"] = trace_id if isinstance(trace_id, str) else None
             result["metadata"] = result["metadata"] | {
                 "model": metadata.get("model"), "task_name": task_definition.name,
+                "model_interface": metadata.get("model_interface", "responses"),
             }
             # Save locally before any trace update that could fail.
             with (output_dir / "results.jsonl").open("a") as stream:
@@ -326,6 +328,7 @@ def run_cases(cases: list[dict], invoke, sleep_seconds: float, output_dir: Path,
             "result_schema_version": 2, "task_name": task_definition.name,
             "task_version": task_definition.version, "metric_name": task_definition.metric_name,
             "model": metadata.get("model"), "ok_count": ok_count,
+            "model_interface": metadata.get("model_interface", "responses"),
             "ko_count": len(results) - ok_count,
             "ko_cases": [{"case_id": r["case_id"], "status": r["status"], "error": r["error"]}
                          for r in results if r["status"] != "correct"],
@@ -405,6 +408,8 @@ def main(argv: list[str] | None = None) -> int:
                 "task_name": task_definition.name, "task_module": args.task,
                 "task_version": task_definition.version, "metric_name": task_definition.metric_name,
                 "model": settings.model, "region": settings.region, "split": args.split,
+                "model_interface": getattr(settings, "model_interface", "responses"),
+                "model_name": getattr(settings, "model_name", "") or settings.model,
                 "sleep_seconds": settings.sleep_seconds, "timeout_seconds": settings.timeout_seconds,
                 "max_output_tokens": settings.max_output_tokens, "automatic_retries": 0,
                 "sdk_versions": {n: version(n) for n in ("openai", "oci-genai-auth", "langfuse")},
@@ -416,6 +421,10 @@ def main(argv: list[str] | None = None) -> int:
             }
             if task_definition.create_invoker is not None:
                 metadata["sdk_versions"]["langgraph"] = version("langgraph")
+            if metadata["model_interface"] == "langchain_oci":
+                metadata["sdk_versions"].update({
+                    name: version(name) for name in ("langchain-oci", "langchain-core", "oci")
+                })
         # Build the signing client before publishing any dataset records.
         with initialization_step(4, "Initialize OCI IAM signing client"):
             client = create_client(settings)
@@ -437,7 +446,9 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 next_step += 1
             else:
-                invoke = lambda task: invoke_model(client, settings, instructions, task)
+                def invoke(task_input: dict) -> dict:
+                    """Invoke one task through the selected shared model interface."""
+                    return invoke_model(client, settings, instructions, task_input)
             print(f"[{next_step}] Initialization complete; starting evaluation ... OK", flush=True)
             summary = run_cases(
                 cases, invoke,

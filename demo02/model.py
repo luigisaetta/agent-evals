@@ -1,22 +1,20 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-09
+Date last modified: 2026-11-10
 License: MIT
-Description: Pace shared OCI Responses calls across both Demo02 agent steps.
+Description: Pace calls to the selected shared OCI interface across Demo02 steps.
 """
 
 import time
-
-from openai import OpenAI
 
 from agent_evals.config import Settings
 from agent_evals.oci_model import invoke_model
 
 
 class PacedResponses:
-    """Call the same configured OCI model sequentially with an inter-call pause."""
+    """Pace either shared OCI backend; retain the original class name for callers."""
 
-    def __init__(self, client: OpenAI, settings: Settings):
+    def __init__(self, client, settings: Settings):
         """Bind the existing signed client and environment-derived settings.
 
         Args:
@@ -28,14 +26,14 @@ class PacedResponses:
         self._called = False
 
     def __call__(self, instructions: str, task_input: object) -> dict:
-        """Issue one Responses request after the configured inter-call pause.
+        """Issue one model request after the configured inter-call pause.
 
         Args:
             instructions: Instructions for the current graph step.
             task_input: Only the payload required by this step.
 
         Returns:
-            The shared Responses result envelope.
+            The shared model result envelope.
         """
         if self._called:
             time.sleep(self.settings.sleep_seconds)
