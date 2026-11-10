@@ -24,6 +24,7 @@ from agent_evals.dataset import load_cases
 from agent_evals.errors import describe_api_error
 from demo01.evaluation import TASK as DEMO01
 from demo02.agent import AgentExecutionError, OfferSelectionAgent
+from demo02.contracts import parse_request
 from demo02.evaluation import TASK as DEMO02
 from demo02.model import PacedResponses
 
@@ -203,6 +204,110 @@ def test_finish_reasons_are_not_blindly_treated_as_success(reason, status):
     assert normalized["response_id"] is None and normalized["usage"] == {}
 
 
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        "```json\n%s\n```",
+        "```\n%s\n```",
+        "```JSON\r\n%s\r\n```",
+        " \n```json \n%s\n```\n\t",
+    ],
+)
+def test_native_json_fences_are_unwrapped_with_original_text_preserved(wrapper):
+    """Remove only a whole-response presentation wrapper before strict parsing."""
+    payload = {
+        "part_id": "PART-001",
+        "delivery_location": "Rome",
+        "latest_delivery_date": "2027-01-02",
+    }
+    text = json.dumps(payload)
+    original = wrapper % text
+    message = AIMessage(content=original, response_metadata={"finish_reason": "stop"})
+    result = langchain_model.normalize_response(
+        LLMResult(generations=[[ChatGeneration(message=message)]]),
+    )
+    assert result["raw_output"] == text
+    assert result["provider_raw_output"] == original
+    assert result["output_normalization"] == "markdown_json_fence_v1"
+    assert parse_request(result["raw_output"]) == payload
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        " \n{}\n ",
+        "Explanation\n```json\n{}\n```",
+        "```json\n{}\n```\nExplanation",
+        "```json\n{}\n```\n```json\n{}\n```",
+        "```python\n{}\n```",
+        "```json\n{}",
+        "````json\n{}\n````",
+        "```json\n```json\n{}\n```\n```",
+    ],
+)
+def test_native_normalization_leaves_plain_or_unsupported_wrappers_unchanged(text):
+    """Avoid extracting JSON from prose, multiple blocks or unsupported fences."""
+    message = AIMessage(content=text, response_metadata={"finish_reason": "stop"})
+    result = langchain_model.normalize_response(
+        LLMResult(generations=[[ChatGeneration(message=message)]]),
+    )
+    assert result["raw_output"] == text
+    assert "provider_raw_output" not in result and "output_normalization" not in result
+
+
+@pytest.mark.parametrize("reason", ["length", "ERROR_TOXIC", "ERROR", None])
+def test_non_completed_native_responses_are_never_unwrapped(reason):
+    """A complete-looking fence cannot conceal a truncated or failed generation."""
+    original = "```json\n{}\n```"
+    message = AIMessage(content=original, response_metadata={"finish_reason": reason})
+    result = langchain_model.normalize_response(
+        LLMResult(generations=[[ChatGeneration(message=message)]]),
+    )
+    assert result["raw_output"] == original and result["response_status"] != "completed"
+    assert "output_normalization" not in result
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"part_id":',
+        '{"part_id":"PART-001"}',
+        '{"part_id":"PART-001","delivery_location":"Rome","latest_delivery_date":"2027-02-30"}',
+        '{"part_id":"PART-001","part_id":"PART-002","delivery_location":"Rome",'
+        '"latest_delivery_date":"2027-01-02"}',
+    ],
+)
+def test_unwrapping_does_not_repair_invalid_json_or_request_fields(body):
+    """Keep strict syntax, field, duplicate-key and date checks after unwrapping."""
+    message = AIMessage(
+        content=f"```json\n{body}\n```", response_metadata={"finish_reason": "stop"}
+    )
+    result = langchain_model.normalize_response(
+        LLMResult(generations=[[ChatGeneration(message=message)]]),
+    )
+    with pytest.raises(ValueError):
+        parse_request(result["raw_output"])
+
+
+def test_responses_backend_keeps_fenced_output_and_strict_parsing():
+    """Prove that the native-chat patch cannot normalize Responses outputs."""
+    original = "```json\n{}\n```"
+    client = Mock()
+    client.responses.create.return_value = SimpleNamespace(
+        output_text=original,
+        status="completed",
+        id="responses-id",
+        usage=None,
+    )
+    settings = SimpleNamespace(
+        model_interface="responses", model="test", max_output_tokens=256
+    )
+    result = oci_model.invoke_model(client, settings, "instructions", {})
+    assert result["raw_output"] == original and "output_normalization" not in result
+    with pytest.raises(ValueError):
+        parse_request(result["raw_output"])
+
+
 def test_missing_usage_is_not_reported_as_zero(settings, native_client):
     """Keep absent token counts absent through the real LangChain conversion."""
     native_client[0].chat.return_value = native_response("{}", usage=False)
@@ -353,12 +458,14 @@ def test_demo02_graph_uses_native_backend_and_stops_after_bad_extraction(
 
 
 @pytest.mark.parametrize("task", [DEMO01, DEMO02], ids=["demo01", "demo02"])
+@pytest.mark.parametrize("fenced", [False, True], ids=["plain", "fenced"])
 def test_both_demo_runners_record_backend_and_generation_metadata(
     settings,
     native_client,
     monkeypatch,
     tmp_path,
     task,
+    fenced,
 ):
     """Exercise native model dispatch, evaluation and publication mapping together."""
     case = load_cases(
@@ -368,7 +475,10 @@ def test_both_demo_runners_record_backend_and_generation_metadata(
     if task is DEMO02:
         outputs.insert(0, case["expected_output"]["expected_request"])
     native_client[0].chat.side_effect = [
-        native_response(json.dumps(value)) for value in outputs
+        native_response(
+            f"```json\n{json.dumps(value)}\n```" if fenced else json.dumps(value)
+        )
+        for value in outputs
     ]
     monkeypatch.setattr(evaluate, "load_settings", Mock(return_value=settings))
     tracking = Mock()
@@ -423,6 +533,18 @@ def test_both_demo_runners_record_backend_and_generation_metadata(
         value = json.loads((run / name).read_text())
         metadata = value["metadata"] if name == "results.jsonl" else value
         assert metadata["model_interface"] == "langchain_oci"
+    record = json.loads((run / "results.jsonl").read_text())
+    diagnostics = record["steps"] if task is DEMO02 else [record]
+    for diagnostic, output in zip(diagnostics, outputs, strict=True):
+        assert diagnostic["raw_output"] == json.dumps(output)
+        if fenced:
+            assert (
+                diagnostic["provider_raw_output"]
+                == f"```json\n{json.dumps(output)}\n```"
+            )
+            assert diagnostic["output_normalization"] == "markdown_json_fence_v1"
+        else:
+            assert "output_normalization" not in diagnostic
     assert len(generations) == len(outputs)
     assert all(g["metadata"]["model_interface"] == "langchain_oci" for g in generations)
     metadata = json.loads((run / "metadata.json").read_text())

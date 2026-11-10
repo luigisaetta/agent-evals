@@ -6,12 +6,33 @@ Description: Adapt native LangChain OCI chat to the shared model response contra
 """
 
 import json
+import re
 
 import oci
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_oci import ChatOCIGenAI
 
 from agent_evals.config import Settings
+
+
+def _unwrap_json_fence(text: str) -> str:
+    """Remove one complete Markdown wrapper without repairing its JSON body.
+
+    Args:
+        text: Original native model output.
+
+    Returns:
+        The enclosed text for a single JSON/unlabelled fence, otherwise the
+        unchanged output. Existing task parsers validate the enclosed content.
+    """
+    match = re.fullmatch(
+        r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```",
+        text.strip(),
+        re.IGNORECASE | re.DOTALL,
+    )
+    if match is None or "```" in match[1]:
+        return text
+    return match[1]
 
 
 class SingleAttemptChatOCIGenAI(ChatOCIGenAI):
@@ -57,9 +78,11 @@ def normalize_response(result) -> dict:
     # These demos require plain text and never request tool calls or multimodal output.
     if not isinstance(message.content, str) or message.tool_calls:
         status = "failed"
+    original = message.content if isinstance(message.content, str) else ""
+    text = _unwrap_json_fence(original) if status == "completed" else original
     usage = message.usage_metadata or {}
-    return {
-        "raw_output": message.content if isinstance(message.content, str) else "",
+    response = {
+        "raw_output": text,
         "response_status": status,
         "response_id": metadata.get("request_id")
         or (result.llm_output or {}).get("request_id"),
@@ -73,6 +96,10 @@ def normalize_response(result) -> dict:
             if source in usage
         },
     }
+    if text != original:
+        response["provider_raw_output"] = original
+        response["output_normalization"] = "markdown_json_fence_v1"
+    return response
 
 
 class LangChainOCIClient:

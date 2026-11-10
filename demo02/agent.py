@@ -1,6 +1,6 @@
 """
 Author: L. Saetta
-Date last modified: 2026-11-09
+Date last modified: 2026-11-10
 License: MIT
 Description: Run NL request extraction and reused offer selection through LangGraph.
 """
@@ -99,6 +99,9 @@ def _run_step(name: str, call_model: ModelCall, instructions: str,
                     "raw_output": response["raw_output"], "response_id": response.get("response_id"),
                     "usage": response.get("usage", {}), "response_status": response["response_status"],
                 })
+                record.update({key: response[key] for key in (
+                    "provider_raw_output", "output_normalization",
+                ) if key in response})
                 if response["response_status"] != "completed":
                     raise ValueError("Model response did not complete")
                 parsed = parser(response["raw_output"])

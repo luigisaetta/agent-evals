@@ -57,6 +57,13 @@ is sent. Dataset-only `--dry-run` remains offline and does not load model settin
 Native chat disables SDK and LangChain parameter-repair retries, streaming and
 caching. Output-token limits map to native `max_tokens`; no temperature is forced.
 Truncated or unknown finishes are rejected, and missing token usage stays absent.
+Only `langchain_oci` removes one outer Markdown code fence labelled `json` (or
+unlabelled) when it encloses the entire completed response. JSON validation stays
+strict; prose outside the fence, multiple blocks and other language labels are
+not accepted. Changed responses retain `provider_raw_output` and
+`output_normalization` in local Demo01 results or Demo02 step records. Responses
+and prompts are unchanged. This formatting normalization does not correct
+extracted facts or selected offers.
 Run metadata records the interface, underlying model identity and relevant SDK
 versions; per-case results, summaries and Langfuse generations record the interface.
 

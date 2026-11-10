@@ -71,6 +71,31 @@ safe error classification for OCI SDK exceptions without exposing their text.
 
 ## Acceptance criteria and verification
 
+### Confined Markdown normalization (2026-11-10)
+
+The `langchain_oci` adapter may remove one outer Markdown code fence from a
+completed plain-text response. Accept only three-backtick fences with an empty
+language label or `json` (case-insensitive), separate opening/closing lines,
+and optional surrounding whitespace. Require the fence to enclose the entire
+response; multiple/nested fences, other language labels and prose outside the
+block remain unchanged and fail the existing strict task parsers. Do not repair
+JSON, coerce fields, extract objects from surrounding text or normalize incomplete,
+blocked or failed generations. Native unfenced text stays byte-for-byte unchanged.
+
+Confine normalization to `langchain_model.py`, before the existing parser
+boundary. Responses, prompts and both shared task parsers keep their behavior.
+Apply the same adapter behavior to Demo01 selection and both Demo02 stages.
+For changed responses only, retain `provider_raw_output` and the marker
+`output_normalization=markdown_json_fence_v1` in the envelope. Demo01 already
+persists envelope extensions; Demo02 copies only these optional diagnostic fields
+into its step record. This metadata copy does not perform normalization.
+
+Verify accepted/rejected wrappers, unchanged Responses behavior, strict JSON and
+semantic validation after unwrapping, and unchanged non-completed statuses.
+Run both demos with mocked native responses, including fenced extraction and
+selection. Replay saved extraction texts offline only; do not overwrite past
+results or treat replay as a new end-to-end quality experiment.
+
 * Both demos use the configured backend through the same shared boundary.
 * Existing valid Responses configuration remains usable without new variables.
 * Missing backend-specific settings, unknown interfaces and unsupported model
@@ -107,3 +132,12 @@ are formatted with Ruff. Both launcher dry runs pass (100 Demo01 and 300 Demo02
 records). The existing ignored `.env` passes local model/interface validation.
 No live model calls or Langfuse uploads were performed. Native-chat access,
 actual model output quality and remote trace persistence remain unverified.
+
+Markdown patch verification: all 174 offline tests pass, including strict
+Responses isolation, supported/unsupported fence shapes, incomplete responses,
+unchanged schema/date validation, and original-text persistence through both demo
+runners. Ruff correctness checks pass for the changed Python files. Offline
+replay of the user's saved Llama and Cohere development extractions accepts all
+10 outputs per run after fence removal; 7 Llama and 8 Cohere extractions match
+their references. This is extraction-only diagnosis, not end-to-end accuracy.
+No new model requests, Langfuse uploads or changes to historical results occurred.
